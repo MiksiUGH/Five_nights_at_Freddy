@@ -82,8 +82,13 @@ class MainMenu(View):
 
 
 class Game(View):
+    def __init__(self):
+        super().__init__()
+
+        self.map = arcade.load_tilemap('maps/fnaf.tmx')
+
     def on_show(self):
-        self.background_color = arcade.color.GOLD
+        ...
 
     def on_draw(self):
         self.clear()
@@ -119,6 +124,7 @@ class PauseMenu(View):
         self.game = game
 
         self.manager = UIManager()
+        # НЕ включаем здесь – включим в on_show
 
         v_box = UIBoxLayout(vertical=True, space_between=20)
 
@@ -143,7 +149,7 @@ class PauseMenu(View):
         self._update_selection()
 
     def on_show(self):
-        """При показе паузы включаем UI."""
+        """При показе паузы включаем UI и мышь."""
         self.manager.enable()
         self.window.set_mouse_visible(True)
 
@@ -152,25 +158,20 @@ class PauseMenu(View):
         self.manager.disable()
 
     def on_draw(self):
-        """Отрисовка: игра на заднем плане, затемнение и UI поверх."""
-        self.clear()
+        """Отрисовка: игра + затемнение + UI."""
         self.game.on_draw()
         self.manager.draw()
 
-    def on_resume(self, event):
-        """Вернуться в игру."""
-        self.window.show_view(self.game)
+    def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
+        self.manager.on_mouse_press(x, y, button, modifiers)
 
-    def on_main_menu(self, event):
-        """Перейти в главное меню."""
-        self.window.show_view(MainMenu())
+    def on_mouse_release(self, x: float, y: float, button: int, modifiers: int):
+        self.manager.on_mouse_release(x, y, button, modifiers)
 
-    def on_quit(self, event):
-        """Закрыть окно."""
-        self.window.close()
+    def on_mouse_motion(self, x: float, y: float, dx: float, dy: float):
+        self.manager.on_mouse_motion(x, y, dx, dy)
 
     def on_key_release(self, symbol: int, modifiers: int) -> None:
-        """Управление с клавиатуры: стрелки + Enter."""
         if symbol == arcade.key.UP:
             self.selected_index = (self.selected_index - 1) % len(self.buttons)
             self._update_selection()
@@ -182,8 +183,16 @@ class PauseMenu(View):
         elif symbol == arcade.key.ESCAPE:
             self.window.show_view(self.game)
 
+    def on_resume(self, event):
+        self.window.show_view(self.game)
+
+    def on_main_menu(self, event):
+        self.window.show_view(MainMenu())
+
+    def on_quit(self, event):
+        self.window.close()
+
     def _update_selection(self):
-        """Визуальное выделение активной кнопки."""
         for i, btn in enumerate(self.buttons):
             if i == self.selected_index:
                 btn.color = arcade.color.LIGHT_BLUE
