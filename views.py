@@ -83,7 +83,7 @@ class MainMenu(View):
 
 class Game(View):
     def on_show(self):
-        self.background_color = arcade.color.DARK_BLUE
+        self.background_color = arcade.color.GOLD
 
     def on_draw(self):
         self.clear()
@@ -93,7 +93,7 @@ class Game(View):
 
     def on_key_release(self, symbol: int, modifiers: int):
         if symbol == arcade.key.ESCAPE:
-            self.window.show_view(MainMenu())
+            self.window.show_view(PauseMenu(self))
         return None
 
 
@@ -111,3 +111,86 @@ class StaticMenu(View):
         if symbol == arcade.key.ESCAPE:
             self.window.show_view(MainMenu())
         return None
+
+
+class PauseMenu(View):
+    def __init__(self, game):
+        super().__init__()
+        self.game = game
+
+        self.manager = UIManager()
+
+        v_box = UIBoxLayout(vertical=True, space_between=20)
+
+        resume_btn = UIFlatButton(text="Продолжить", width=300, height=60)
+        resume_btn.on_click = self.on_resume
+        v_box.add(resume_btn)
+
+        main_menu_btn = UIFlatButton(text="Главное меню", width=300, height=60)
+        main_menu_btn.on_click = self.on_main_menu
+        v_box.add(main_menu_btn)
+
+        quit_btn = UIFlatButton(text="Выход", width=300, height=60)
+        quit_btn.on_click = self.on_quit
+        v_box.add(quit_btn)
+
+        anchor = UIAnchorLayout()
+        anchor.add(v_box, anchor_x="center_x", anchor_y="center_y")
+        self.manager.add(anchor)
+
+        self.buttons = [resume_btn, main_menu_btn, quit_btn]
+        self.selected_index = 0
+        self._update_selection()
+
+    def on_show(self):
+        """При показе паузы включаем UI."""
+        self.manager.enable()
+        self.window.set_mouse_visible(True)
+
+    def on_hide(self):
+        """При скрытии паузы отключаем UI."""
+        self.manager.disable()
+
+    def on_draw(self):
+        """Отрисовка: игра на заднем плане, затемнение и UI поверх."""
+        self.clear()
+        self.game.on_draw()
+        self.manager.draw()
+
+    def on_resume(self, event):
+        """Вернуться в игру."""
+        self.window.show_view(self.game)
+
+    def on_main_menu(self, event):
+        """Перейти в главное меню."""
+        self.window.show_view(MainMenu())
+
+    def on_quit(self, event):
+        """Закрыть окно."""
+        self.window.close()
+
+    def on_key_release(self, symbol: int, modifiers: int) -> None:
+        """Управление с клавиатуры: стрелки + Enter."""
+        if symbol == arcade.key.UP:
+            self.selected_index = (self.selected_index - 1) % len(self.buttons)
+            self._update_selection()
+        elif symbol == arcade.key.DOWN:
+            self.selected_index = (self.selected_index + 1) % len(self.buttons)
+            self._update_selection()
+        elif symbol == arcade.key.ENTER:
+            self.buttons[self.selected_index].on_click(None)
+        elif symbol == arcade.key.ESCAPE:
+            self.window.show_view(self.game)
+
+    def _update_selection(self):
+        """Визуальное выделение активной кнопки."""
+        for i, btn in enumerate(self.buttons):
+            if i == self.selected_index:
+                btn.color = arcade.color.LIGHT_BLUE
+                btn.hover_color = arcade.color.LIGHT_BLUE
+                btn.press_color = arcade.color.BRIGHT_GREEN
+            else:
+                btn.color = None
+                btn.hover_color = None
+                btn.press_color = None
+            btn.trigger_render()
