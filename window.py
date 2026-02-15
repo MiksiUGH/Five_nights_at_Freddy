@@ -21,6 +21,6 @@ class MainWindow(Window):
 
 
 if __name__ == "__main__":
-    window = MainWindow(800, 600, "Five Nights at Freddy's")
+    window = MainWindow(1550, 850, "Five Nights at Freddy's")
     window.setup()
     run()

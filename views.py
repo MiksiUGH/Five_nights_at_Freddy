@@ -1,6 +1,7 @@
-from arcade import View
+from arcade import View, PhysicsEngineSimple, Camera2D
 import arcade
 from arcade.gui import UIManager, UIBoxLayout, UIFlatButton, UIAnchorLayout
+from charecters import NightGuard
 
 
 class MainMenu(View):
@@ -84,47 +85,107 @@ class MainMenu(View):
 class Game(View):
     def __init__(self):
         super().__init__()
+        self.scene = None
+        self.map = None
+        self.wall_list = None
+        self.physics_engine = None
 
-        self.map = arcade.load_tilemap('maps/fnaf.tmx')
+        self.map = arcade.load_tilemap("maps/fnaf.tmx", scaling=4.3)
+        self.scene = arcade.Scene.from_tilemap(self.map)
 
-    def on_show(self):
-        ...
+        self.player = NightGuard()
+        self.player_list = arcade.SpriteList()
+        self.player.center_x = 400
+        self.player.center_y = 300
+
+        self.player_list.append(self.player)
+        self.wall_list = self.map.sprite_lists["walls"]
+
+        self.physics_engine = PhysicsEngineSimple(self.player, self.wall_list)
+
+        self.world_camera = Camera2D()
+        self.gui_camera = Camera2D()
+        self.center_camera_on_player()
+
+    def center_camera_on_player(self):
+        """Перемещает мировую камеру так, чтобы игрок был в центре экрана,
+        с учётом границ карты."""
+        dead_zone_h = int(self.window.height * 0.45)
+        dead_zone_w = int(self.window.width * 0.35)
+        camera_lerp = 1.1
+        self.world_width = int(self.map.width * self.map.tile_width * 4.3)
+        self.world_height = int(self.map.height * self.map.tile_height * 4.3)
+
+        cam_x, cam_y = self.world_camera.position
+        dz_left = cam_x - dead_zone_w // 2
+        dz_right = cam_x + dead_zone_w // 2
+        dz_bottom = cam_y - dead_zone_h // 2
+        dz_top = cam_y + dead_zone_h // 2
+
+        px, py = self.player.center_x, self.player.center_y
+        target_x, target_y = cam_x, cam_y
+
+        if px < dz_left:
+            target_x = px + dead_zone_w // 2
+        elif px > dz_right:
+            target_x = px - dead_zone_w // 2
+        if py < dz_bottom:
+            target_y = py + dead_zone_h // 2
+        elif py > dz_top:
+            target_y = py - dead_zone_h // 2
+
+        half_w = self.world_camera.viewport_width / 2
+        half_h = self.world_camera.viewport_height / 2
+        target_x = max(half_w, min(self.world_width - half_w, target_x))
+        target_y = max(half_h, min(self.world_height - half_h, target_y))
+
+        smooth_x = (1 - camera_lerp) * cam_x + camera_lerp * target_x
+        smooth_y = (1 - camera_lerp) * cam_y + camera_lerp * target_y
+        self.cam_target = (smooth_x, smooth_y)
+
+        self.world_camera.position = (self.cam_target[0], self.cam_target[1])
 
     def on_draw(self):
         self.clear()
-        arcade.draw_text("Game View — здесь будет игра",
-                         self.window.width // 2, self.window.height // 2,
-                         arcade.color.WHITE, anchor_x="center")
+
+        self.world_camera.use()
+        if self.scene:
+            self.scene.draw()
+        self.player_list.draw()
+
+        self.gui_camera.use()
+
+    def on_update(self, dt: float):
+        self.physics_engine.update()
+        self.player.update_animation(dt)
+        self.center_camera_on_player()
+
+    def on_key_press(self, symbol: int, modifiers: int):
+        if symbol == arcade.key.W:
+            self.player.change_y = self.player.speed
+        if symbol == arcade.key.S:
+            self.player.change_y = -self.player.speed
+        if symbol == arcade.key.A:
+            self.player.change_x = -self.player.speed
+        if symbol == arcade.key.D:
+            self.player.change_x = self.player.speed
 
     def on_key_release(self, symbol: int, modifiers: int):
         if symbol == arcade.key.ESCAPE:
             self.window.show_view(PauseMenu(self))
-        return None
-
-
-class StaticMenu(View):
-    def on_show(self):
-        self.background_color = arcade.color.DARK_GREEN
-
-    def on_draw(self):
-        self.clear()
-        arcade.draw_text("Statistics Menu — здесь будет статистика",
-                         self.window.width // 2, self.window.height // 2,
-                         arcade.color.WHITE, anchor_x="center")
-
-    def on_key_release(self, symbol: int, modifiers: int):
-        if symbol == arcade.key.ESCAPE:
-            self.window.show_view(MainMenu())
-        return None
+        if symbol == arcade.key.W or symbol == arcade.key.S:
+            self.player.change_y = 0
+        if symbol == arcade.key.A or symbol == arcade.key.D:
+            self.player.change_x = 0
 
 
 class PauseMenu(View):
     def __init__(self, game):
         super().__init__()
+        self.ui_camera = None
         self.game = game
 
         self.manager = UIManager()
-        # НЕ включаем здесь – включим в on_show
 
         v_box = UIBoxLayout(vertical=True, space_between=20)
 
@@ -149,17 +210,16 @@ class PauseMenu(View):
         self._update_selection()
 
     def on_show(self):
-        """При показе паузы включаем UI и мышь."""
         self.manager.enable()
         self.window.set_mouse_visible(True)
+        self.ui_camera = Camera2D(viewport=(self.window.width, self.window.height))
 
     def on_hide(self):
-        """При скрытии паузы отключаем UI."""
         self.manager.disable()
 
     def on_draw(self):
-        """Отрисовка: игра + затемнение + UI."""
         self.game.on_draw()
+        self.ui_camera.use()
         self.manager.draw()
 
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
@@ -203,3 +263,19 @@ class PauseMenu(View):
                 btn.hover_color = None
                 btn.press_color = None
             btn.trigger_render()
+
+
+class StaticMenu(View):
+    def on_show(self):
+        self.background_color = arcade.color.DARK_GREEN
+
+    def on_draw(self):
+        self.clear()
+        arcade.draw_text("Statistics Menu — здесь будет статистика",
+                         self.window.width // 2, self.window.height // 2,
+                         arcade.color.WHITE, anchor_x="center")
+
+    def on_key_release(self, symbol: int, modifiers: int):
+        if symbol == arcade.key.ESCAPE:
+            self.window.show_view(MainMenu())
+        return None
