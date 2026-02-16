@@ -90,7 +90,7 @@ class Game(View):
         self.wall_list = None
         self.physics_engine = None
 
-        self.map = arcade.load_tilemap("maps/fnaf.tmx", scaling=4.3)
+        self.map = arcade.load_tilemap("maps/fnaf.tmx", scaling=3.7)
         self.scene = arcade.Scene.from_tilemap(self.map)
 
         self.player = NightGuard()
@@ -113,8 +113,8 @@ class Game(View):
         dead_zone_h = int(self.window.height * 0.45)
         dead_zone_w = int(self.window.width * 0.35)
         camera_lerp = 1.1
-        self.world_width = int(self.map.width * self.map.tile_width * 4.3)
-        self.world_height = int(self.map.height * self.map.tile_height * 4.3)
+        self.world_width = int(self.map.width * self.map.tile_width * 3.7)
+        self.world_height = int(self.map.height * self.map.tile_height * 3.7)
 
         cam_x, cam_y = self.world_camera.position
         dz_left = cam_x - dead_zone_w // 2
@@ -212,14 +212,12 @@ class PauseMenu(View):
     def on_show(self):
         self.manager.enable()
         self.window.set_mouse_visible(True)
-        self.ui_camera = Camera2D(viewport=(self.window.width, self.window.height))
 
     def on_hide(self):
         self.manager.disable()
 
     def on_draw(self):
         self.game.on_draw()
-        self.ui_camera.use()
         self.manager.draw()
 
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
