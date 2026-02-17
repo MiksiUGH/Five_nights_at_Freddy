@@ -89,6 +89,7 @@ class Game(View):
         self.map = None
         self.wall_list = None
         self.physics_engine = None
+        self.stealth_mode = False
 
         self.map = arcade.load_tilemap("maps/fnaf.tmx", scaling=3.7)
         self.scene = arcade.Scene.from_tilemap(self.map)
@@ -163,14 +164,26 @@ class Game(View):
         self.center_camera_on_player()
 
     def on_key_press(self, symbol: int, modifiers: int):
-        if symbol == arcade.key.W:
-            self.player.change_y = self.player.speed
-        if symbol == arcade.key.S:
-            self.player.change_y = -self.player.speed
-        if symbol == arcade.key.A:
-            self.player.change_x = -self.player.speed
-        if symbol == arcade.key.D:
-            self.player.change_x = self.player.speed
+        if not self.stealth_mode:
+            if symbol == arcade.key.W:
+                self.player.change_y = self.player.speed
+            if symbol == arcade.key.S:
+                self.player.change_y = -self.player.speed
+            if symbol == arcade.key.A:
+                self.player.change_x = -self.player.speed
+            if symbol == arcade.key.D:
+                self.player.change_x = self.player.speed
+
+        if symbol == arcade.key.SPACE:
+            activation_distance = 110
+            for obj in self.objects_list:
+                dist = arcade.get_distance_between_sprites(self.player, obj)
+                if dist <= activation_distance:
+                    self.stealth_mode = True
+                    self.player.alpha = 0
+                    self.player.change_x = 0
+                    self.player.change_y = 0
+                    break
 
     def on_key_release(self, symbol: int, modifiers: int):
         if symbol == arcade.key.ESCAPE:
@@ -180,7 +193,7 @@ class Game(View):
         if symbol == arcade.key.A or symbol == arcade.key.D:
             self.player.change_x = 0
         if symbol == arcade.key.E:
-            activation_distance = 150
+            activation_distance = 110
             for door in self.doors_list:
                 dist = arcade.get_distance_between_sprites(self.player, door)
                 if dist <= activation_distance:
@@ -196,6 +209,9 @@ class Game(View):
                         else:
                             self.player.center_x = door.center_x - door.width // 2 - self.player.width // 2 - 30
                     break
+        if symbol == arcade.key.SPACE:
+            self.stealth_mode = False
+            self.player.alpha = 255
 
 
 class PauseMenu(View):
