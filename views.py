@@ -100,8 +100,10 @@ class Game(View):
 
         self.player_list.append(self.player)
         self.wall_list = self.map.sprite_lists["walls"]
+        self.doors_list = self.map.sprite_lists["doors"]
+        self.objects_list = self.map.sprite_lists["objects"]
 
-        self.physics_engine = PhysicsEngineSimple(self.player, self.wall_list)
+        self.physics_engine = PhysicsEngineSimple(self.player, (self.wall_list, self.doors_list))
 
         self.world_camera = Camera2D()
         self.gui_camera = Camera2D()
@@ -177,6 +179,23 @@ class Game(View):
             self.player.change_y = 0
         if symbol == arcade.key.A or symbol == arcade.key.D:
             self.player.change_x = 0
+        if symbol == arcade.key.E:
+            activation_distance = 150
+            for door in self.doors_list:
+                dist = arcade.get_distance_between_sprites(self.player, door)
+                if dist <= activation_distance:
+                    orientation = door.properties.get("orientation", None)
+                    if orientation is not None:
+                        if self.player.center_y < door.center_y:
+                            self.player.center_y = door.center_y + door.height // 2 + self.player.height // 2 + 30
+                        else:
+                            self.player.center_y = door.center_y - door.height // 2 - self.player.height // 2 - 30
+                    else:
+                        if self.player.center_x < door.center_x:
+                            self.player.center_x = door.center_x + door.width // 2 + self.player.width // 2 + 30
+                        else:
+                            self.player.center_x = door.center_x - door.width // 2 - self.player.width // 2 - 30
+                    break
 
 
 class PauseMenu(View):
