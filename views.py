@@ -1,7 +1,7 @@
 from arcade import View, PhysicsEngineSimple, Camera2D
-import arcade
+import arcade, time, random
 from arcade.gui import UIManager, UIBoxLayout, UIFlatButton, UIAnchorLayout
-from charecters import NightGuard
+from charecters import NightGuard, Bonnie
 
 
 class MainMenu(View):
@@ -90,6 +90,7 @@ class Game(View):
         self.wall_list = None
         self.physics_engine = None
         self.stealth_mode = False
+        self.start_time = None
 
         self.map = arcade.load_tilemap("maps/fnaf.tmx", scaling=3.7)
         self.scene = arcade.Scene.from_tilemap(self.map)
@@ -109,6 +110,25 @@ class Game(View):
         self.world_camera = Camera2D()
         self.gui_camera = Camera2D()
         self.center_camera_on_player()
+
+        self.bonnie_list = arcade.SpriteList()
+        self.bonnie_physics = None
+        self.activation_timer = 0
+        self.activation_interval = 10.0  # каждые 10 секунд
+
+        # Создаём Бонни и добавляем в список
+        self.bonnie = Bonnie()
+        # Установим начальную позицию (подбери координаты, где Бонни должен появиться)
+        self.bonnie.center_x = 1900
+        self.bonnie.center_y = 2400
+        self.bonnie_list.append(self.bonnie)
+
+        # Физика для Бонни (те же стены)
+        self.bonnie_physics = PhysicsEngineSimple(self.bonnie, self.wall_list)
+
+    def on_show_view(self):
+        self.start_time = time.time()
+        self.activation_timer = 0
 
     def center_camera_on_player(self):
         """Перемещает мировую камеру так, чтобы игрок был в центре экрана,
@@ -155,13 +175,50 @@ class Game(View):
         if self.scene:
             self.scene.draw()
         self.player_list.draw()
+        self.bonnie_list.draw()
 
         self.gui_camera.use()
+
+        if self.start_time:
+            elapsed = time.time() - self.start_time
+            minutes = int(elapsed // 60)
+            seconds = int(elapsed % 60)
+            time_str = f"{minutes:02d}:{seconds:02d}"
+            arcade.draw_text(
+                time_str,
+                self.window.width - 20,  # отступ справа
+                self.window.height - 20,  # отступ сверху
+                arcade.color.WHITE,
+                font_size=20,
+                anchor_x="right",
+                anchor_y="top"
+            )
 
     def on_update(self, dt: float):
         self.physics_engine.update()
         self.player.update_animation(dt)
         self.center_camera_on_player()
+
+        if self.bonnie_physics:
+            self.bonnie_physics.update()  # применяем физику к Бонни
+        self.bonnie.update(dt, self.player, self.stealth_mode)
+        self.bonnie.update_animation(dt)
+
+        # Проверка столкновения Бонни с игроком
+        if not self.stealth_mode and arcade.check_for_collision(self.player, self.bonnie):
+            print("Bonnie caught you! Game Over")
+            self.window.show_view(MainMenu())  # или можно закрыть игру
+
+        # Таймер активации Бонни (каждые 10 секунд)
+        self.activation_timer += dt
+        if self.activation_timer >= self.activation_interval:
+            self.activation_timer = 0
+            if self.bonnie.state == "inactive":
+                if random.random() < 0.8:  # 80% шанс
+                    self.bonnie.state = "patrol"
+                    self.bonnie.texture = self.bonnie.idle_texture
+                    self.bonnie.center_y = 2250
+                    print("Bonnie activated!")
 
     def on_key_press(self, symbol: int, modifiers: int):
         if not self.stealth_mode:
