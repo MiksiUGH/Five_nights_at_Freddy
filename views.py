@@ -129,6 +129,7 @@ class Game(View):
     def on_show_view(self):
         self.start_time = time.time()
         self.activation_timer = 0
+        self.bonnie.last_pos = (self.bonnie.center_x, self.bonnie.center_y)
 
     def center_camera_on_player(self):
         """Перемещает мировую камеру так, чтобы игрок был в центре экрана,

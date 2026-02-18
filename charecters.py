@@ -108,6 +108,9 @@ class Bonnie(arcade.Sprite):
         self.texture = self.not_activate
         self.speed = 4
         self.chase_speed = 6
+        self.stuck_timer = 0
+        self.stuck_threshold = 0.5  # секунд без движения
+        self.last_pos = (self.center_x, self.center_y)
 
         # Для анимации
         self.cur_texture_index = 0
@@ -145,6 +148,38 @@ class Bonnie(arcade.Sprite):
             self._patrol_update(dt)
         elif self.state == "chase":
             self._chase_update(player)
+
+        if (self.change_x != 0 or self.change_y != 0) and self.state != "inactive":
+            if abs(self.center_x - self.last_pos[0]) < 1 and abs(self.center_y - self.last_pos[1]) < 1:
+                self.stuck_timer += dt
+            else:
+                self.stuck_timer = 0
+            self.last_pos = (self.center_x, self.center_y)
+
+            if self.stuck_timer > self.stuck_threshold:
+                # Застрял — меняем направление
+                if self.state == "patrol":
+                    angle = random.uniform(0, 2 * math.pi)
+                    self.change_x = math.cos(angle) * self.speed
+                    self.change_y = math.sin(angle) * self.speed
+                elif self.state == "chase":
+                    dx = player.center_x - self.center_x
+                    dy = player.center_y - self.center_y
+                    dist = math.hypot(dx, dy)
+                    if dist > 0:
+                        if random.random() < 0.5:
+                            # влево
+                            self.change_x = -dy / dist * self.speed
+                            self.change_y = dx / dist * self.speed
+                        else:
+                            # вправо
+                            self.change_x = dy / dist * self.speed
+                            self.change_y = -dx / dist * self.speed
+                    else:
+                        angle = random.uniform(0, 2 * math.pi)
+                        self.change_x = math.cos(angle) * self.speed
+                        self.change_y = math.sin(angle) * self.speed
+                self.stuck_timer = 0
 
     def _patrol_update(self, dt: float):
         """Случайное блуждание."""
