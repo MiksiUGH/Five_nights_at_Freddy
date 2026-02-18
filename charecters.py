@@ -79,6 +79,8 @@ class Bonnie(arcade.Sprite):
         super().__init__(scale=1.3)
 
         self.activated = False
+        self.jumpscare = arcade.load_texture('images/bonnie/jumpscare.jpg')
+        self.jumpscare_sound = arcade.load_sound('sounds/scearm_sound.mp3')
         self.not_activate = arcade.load_texture('images/bonnie/sprite00.png')
         self.idle_texture = arcade.load_texture("images/bonnie/sprite4.png")
         self.walk_right_textures = [

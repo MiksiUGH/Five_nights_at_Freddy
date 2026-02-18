@@ -91,6 +91,9 @@ class Game(View):
         self.physics_engine = None
         self.stealth_mode = False
         self.start_time = None
+        self.game_over = False
+        self.game_over_timer = 0
+        self.game_over_duration = 2.0
 
         self.map = arcade.load_tilemap("maps/fnaf.tmx", scaling=3.7)
         self.scene = arcade.Scene.from_tilemap(self.map)
@@ -130,6 +133,7 @@ class Game(View):
         self.start_time = time.time()
         self.activation_timer = 0
         self.bonnie.last_pos = (self.bonnie.center_x, self.bonnie.center_y)
+        self.game_over = False
 
     def center_camera_on_player(self):
         """Перемещает мировую камеру так, чтобы игрок был в центре экрана,
@@ -180,7 +184,7 @@ class Game(View):
 
         self.gui_camera.use()
 
-        if self.start_time:
+        if self.start_time and not self.game_over:
             elapsed = time.time() - self.start_time
             minutes = int(elapsed // 60)
             seconds = int(elapsed % 60)
@@ -195,7 +199,20 @@ class Game(View):
                 anchor_y="top"
             )
 
+        if self.game_over:
+            # Скример
+            texture = self.bonnie.jumpscare
+            arcade.draw_texture_rect(
+                texture, arcade.LBWH(0, 0, self.width, self.height),
+            )
+
     def on_update(self, dt: float):
+        if self.game_over:
+            self.game_over_timer += dt
+            if self.game_over_timer >= self.game_over_duration:
+                self.window.show_view(MainMenu())
+            return
+
         self.physics_engine.update()
         self.player.update_animation(dt)
         self.center_camera_on_player()
@@ -207,8 +224,14 @@ class Game(View):
 
         # Проверка столкновения Бонни с игроком
         if not self.stealth_mode and arcade.check_for_collision(self.player, self.bonnie):
+            self.game_over = True
+            self.game_over_timer = 0
+            arcade.play_sound(self.bonnie.jumpscare_sound)
+            self.player.change_x = 0
+            self.player.change_y = 0
+            self.bonnie.change_x = 0
+            self.bonnie.change_y = 0
             print("Bonnie caught you! Game Over")
-            self.window.show_view(MainMenu())  # или можно закрыть игру
 
         # Таймер активации Бонни (каждые 10 секунд)
         self.activation_timer += dt
@@ -222,6 +245,8 @@ class Game(View):
                     print("Bonnie activated!")
 
     def on_key_press(self, symbol: int, modifiers: int):
+        if self.game_over:
+            return
         if not self.stealth_mode:
             if symbol == arcade.key.W:
                 self.player.change_y = self.player.speed
@@ -244,6 +269,8 @@ class Game(View):
                     break
 
     def on_key_release(self, symbol: int, modifiers: int):
+        if self.game_over:
+            return
         if symbol == arcade.key.ESCAPE:
             self.window.show_view(PauseMenu(self))
         if symbol == arcade.key.W or symbol == arcade.key.S:
