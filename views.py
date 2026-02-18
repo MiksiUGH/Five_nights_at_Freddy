@@ -1,7 +1,7 @@
 from arcade import View, PhysicsEngineSimple, Camera2D
 import arcade, time, random
 from arcade.gui import UIManager, UIBoxLayout, UIFlatButton, UIAnchorLayout
-from charecters import NightGuard, Bonnie
+from charecters import NightGuard, Bonnie, Freddy, Chika, Foxy
 
 
 class MainMenu(View):
@@ -97,6 +97,8 @@ class Game(View):
 
         self.map = arcade.load_tilemap("maps/fnaf.tmx", scaling=3.7)
         self.scene = arcade.Scene.from_tilemap(self.map)
+        self.world_width = self.map.width * self.map.tile_width * 3.7
+        self.world_height = self.map.height * self.map.tile_height * 3.7
 
         self.player = NightGuard()
         self.player_list = arcade.SpriteList()
@@ -107,6 +109,7 @@ class Game(View):
         self.wall_list = self.map.sprite_lists["walls"]
         self.doors_list = self.map.sprite_lists["doors"]
         self.objects_list = self.map.sprite_lists["objects"]
+        self.textures_list = self.map.sprite_lists["textures"]
 
         self.physics_engine = PhysicsEngineSimple(self.player, (self.wall_list, self.doors_list))
 
@@ -123,17 +126,57 @@ class Game(View):
         self.bonnie = Bonnie()
         # Установим начальную позицию (подбери координаты, где Бонни должен появиться)
         self.bonnie.center_x = 2100
-        self.bonnie.center_y = 2400
+        self.bonnie.center_y = 2330
         self.bonnie_list.append(self.bonnie)
 
+        self.chika = Chika()
+        self.chika.center_x = 1700  # координаты сцены
+        self.chika.center_y = 2330
+        self.chika_list = arcade.SpriteList()
+        self.chika_list.append(self.chika)
+
+        # Кекс
+        self.cupcake_sprite = arcade.Sprite(self.chika.cupcake, scale=0.05)
+        self.cupcake_sprite.alpha = 0
+        self.cupcake_list = arcade.SpriteList()
+        self.cupcake_list.append(self.cupcake_sprite)
+
+        self.chika_activation_timer = 0
+        self.chika_activation_interval = 15.0
+        self.chika_activated = False
+
+        self.cupcake_timer = 0
+        self.cupcake_interval = 15.0
+
         # Физика для Бонни (те же стены)
-        self.bonnie_physics = PhysicsEngineSimple(self.bonnie, self.wall_list)
+        self.bonnie_physics = PhysicsEngineSimple(self.bonnie, (self.wall_list, self.cupcake_list))
 
     def on_show_view(self):
         self.start_time = time.time()
         self.activation_timer = 0
         self.bonnie.last_pos = (self.bonnie.center_x, self.bonnie.center_y)
         self.game_over = False
+        self.chika_activation_timer = 0
+        self.chika_activated = False
+        self.chika.alpha = 255
+        self.chika.texture = self.chika.not_activate
+        self.cupcake_sprite.alpha = 0
+        self.cupcake_timer = 0
+
+    def _place_cupcake_randomly(self):
+        """Размещает кекс в случайной позиции, не занятой стенами."""
+        for _ in range(100):  # максимум 100 попыток
+            x = random.uniform(42, self.world_width - 42)
+            y = random.uniform(42, self.world_height - 42)
+            self.cupcake_sprite.position = (x, y)
+            if not arcade.check_for_collision_with_list(self.cupcake_sprite, self.wall_list):
+                if not arcade.check_for_collision_with_list(self.cupcake_sprite, self.doors_list):
+                    if arcade.check_for_collision_with_list(self.cupcake_sprite, self.textures_list):
+                        return
+
+        x = random.uniform(50, self.world_width - 50)
+        y = random.uniform(50, self.world_height - 50)
+        self.cupcake_sprite.position = (x, y)
 
     def center_camera_on_player(self):
         """Перемещает мировую камеру так, чтобы игрок был в центре экрана,
@@ -181,6 +224,9 @@ class Game(View):
             self.scene.draw()
         self.player_list.draw()
         self.bonnie_list.draw()
+        self.chika_list.draw()  # Чика видна, пока alpha=255
+        if self.chika_activated:
+            self.cupcake_list.draw()
 
         self.gui_camera.use()
 
@@ -200,8 +246,12 @@ class Game(View):
             )
 
         if self.game_over:
-            # Скример
-            texture = self.bonnie.jumpscare
+            texture = None
+            if arcade.check_for_collision_with_list(self.player, self.bonnie_list):
+                texture = self.bonnie.jumpscare
+            elif arcade.check_for_collision_with_list(self.player, self.cupcake_list):
+                texture = self.chika.jumpscare
+
             arcade.draw_texture_rect(
                 texture, arcade.LBWH(0, 0, self.width, self.height),
             )
@@ -243,6 +293,33 @@ class Game(View):
                     self.bonnie.texture = self.bonnie.idle_texture
                     self.bonnie.center_y = 2250
                     print("Bonnie activated!")
+
+        if not self.chika_activated:
+            self.chika_activation_timer += dt
+            if self.chika_activation_timer >= self.chika_activation_interval:
+                self.chika_activation_timer = 0
+                if random.random() < 0.7:
+                    self.chika_activated = True
+                    self.chika.alpha = 0  # Чика исчезает
+                    self.cupcake_sprite.alpha = 255
+                    self._place_cupcake_randomly()
+                    print("Chika activated, cupcake spawned!")
+        else:
+            self.cupcake_timer += dt
+            if self.cupcake_timer >= self.cupcake_interval:
+                self.cupcake_timer = 0
+                self._place_cupcake_randomly()
+                print("Cupcake moved")
+
+            # Проверка столкновения с кексом
+        if self.chika_activated and not self.stealth_mode:
+            if arcade.check_for_collision(self.player, self.cupcake_sprite):
+                self.game_over = True
+                self.game_over_timer = 0
+                arcade.play_sound(self.chika.jumpscare_sound)
+                self.player.change_x = 0
+                self.player.change_y = 0
+                print("Cupcake caught you!")
 
     def on_key_press(self, symbol: int, modifiers: int):
         if self.game_over:

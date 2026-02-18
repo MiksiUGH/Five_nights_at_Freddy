@@ -242,7 +242,17 @@ class Bonnie(arcade.Sprite):
 
 
 class Chika(arcade.Sprite):
-    ...
+    def __init__(self):
+        super().__init__(scale=1.3)
+
+        self.cupcake = arcade.load_texture('images/chika/cupcake.png')
+        self.not_activate = arcade.load_texture('images/chika/sprite00.png')
+        self.jumpscare_sound = arcade.load_sound('sounds/scearm_sound.mp3')
+        self.jumpscare = arcade.load_texture('images/chika/jumpscare.jpg')
+
+        self.state = "inactive"  # inactive, active
+        self.texture = self.not_activate
+        self.alpha = 255
 
 
 class Foxy(arcade.Sprite):
