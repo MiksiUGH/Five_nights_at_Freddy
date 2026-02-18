@@ -122,7 +122,7 @@ class Game(View):
         # Создаём Бонни и добавляем в список
         self.bonnie = Bonnie()
         # Установим начальную позицию (подбери координаты, где Бонни должен появиться)
-        self.bonnie.center_x = 1900
+        self.bonnie.center_x = 2100
         self.bonnie.center_y = 2400
         self.bonnie_list.append(self.bonnie)
 
