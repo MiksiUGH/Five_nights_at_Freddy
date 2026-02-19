@@ -102,8 +102,8 @@ class Game(View):
 
         self.player = NightGuard()
         self.player_list = arcade.SpriteList()
-        self.player.center_x = 400
-        self.player.center_y = 300
+        self.player.center_x = 2100
+        self.player.center_y = 1900
 
         self.player_list.append(self.player)
         self.wall_list = self.map.sprite_lists["walls"]
@@ -125,13 +125,13 @@ class Game(View):
         # Создаём Бонни и добавляем в список
         self.bonnie = Bonnie()
         # Установим начальную позицию (подбери координаты, где Бонни должен появиться)
-        self.bonnie.center_x = 2100
-        self.bonnie.center_y = 2330
+        self.bonnie.center_x = 1600
+        self.bonnie.center_y = 2255
         self.bonnie_list.append(self.bonnie)
 
         self.chika = Chika()
-        self.chika.center_x = 1700  # координаты сцены
-        self.chika.center_y = 2330
+        self.chika.center_x = 2100  # координаты сцены
+        self.chika.center_y = 2245
         self.chika_list = arcade.SpriteList()
         self.chika_list.append(self.chika)
 
@@ -150,6 +150,7 @@ class Game(View):
 
         # Физика для Бонни (те же стены)
         self.bonnie_physics = PhysicsEngineSimple(self.bonnie, (self.wall_list, self.cupcake_list))
+        self.chika_physics = PhysicsEngineSimple(self.chika, self.wall_list)
 
     def on_show_view(self):
         self.start_time = time.time()
@@ -271,6 +272,8 @@ class Game(View):
             self.bonnie_physics.update()  # применяем физику к Бонни
         self.bonnie.update(dt, self.player, self.stealth_mode)
         self.bonnie.update_animation(dt)
+
+        self.chika_physics.update()
 
         # Проверка столкновения Бонни с игроком
         if not self.stealth_mode and arcade.check_for_collision(self.player, self.bonnie):
