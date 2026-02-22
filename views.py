@@ -148,21 +148,38 @@ class Game(View):
         self.cupcake_timer = 0
         self.cupcake_interval = 15.0
 
-        # Физика для Бонни (те же стены)
-        self.bonnie_physics = PhysicsEngineSimple(self.bonnie, (self.wall_list, self.cupcake_list))
+        self.foxy = Foxy()
+        self.foxy.center_x = 1400  # выберите подходящую позицию
+        self.foxy.center_y = 2000
+        self.foxy_list = arcade.SpriteList()
+        self.foxy_list.append(self.foxy)
+
+        self.bonnie_physics = PhysicsEngineSimple(self.bonnie, (self.wall_list, self.cupcake_list, self.foxy_list))
         self.chika_physics = PhysicsEngineSimple(self.chika, self.wall_list)
+        self.foxy_physics = PhysicsEngineSimple(self.foxy, (self.wall_list, self.cupcake_list, self.bonnie_list))
 
     def on_show_view(self):
         self.start_time = time.time()
         self.activation_timer = 0
         self.bonnie.last_pos = (self.bonnie.center_x, self.bonnie.center_y)
         self.game_over = False
+
         self.chika_activation_timer = 0
         self.chika_activated = False
         self.chika.alpha = 255
         self.chika.texture = self.chika.not_activate
         self.cupcake_sprite.alpha = 0
         self.cupcake_timer = 0
+
+        self.foxy.state = "inactive"
+        self.foxy.activation_timer = 0
+        self.foxy.step_timer = 0
+        self.foxy.step_index = 0
+        self.foxy.texture = self.foxy.not_activate
+        self.foxy.center_x = 1400
+        self.foxy.center_y = 2000
+        self.foxy.change_x = 0
+        self.foxy.change_y = 0
 
     def _place_cupcake_randomly(self):
         """Размещает кекс в случайной позиции, не занятой стенами."""
@@ -225,7 +242,8 @@ class Game(View):
             self.scene.draw()
         self.player_list.draw()
         self.bonnie_list.draw()
-        self.chika_list.draw()  # Чика видна, пока alpha=255
+        self.chika_list.draw()
+        self.foxy_list.draw()
         if self.chika_activated:
             self.cupcake_list.draw()
 
@@ -252,6 +270,8 @@ class Game(View):
                 texture = self.bonnie.jumpscare
             elif arcade.check_for_collision_with_list(self.player, self.cupcake_list):
                 texture = self.chika.jumpscare
+            elif arcade.check_for_collision_with_list(self.player, self.foxy_list):
+                texture = self.foxy.jumpscare
 
             arcade.draw_texture_rect(
                 texture, arcade.LBWH(0, 0, self.width, self.height),
@@ -323,6 +343,21 @@ class Game(View):
                 self.player.change_x = 0
                 self.player.change_y = 0
                 print("Cupcake caught you!")
+
+        self.foxy_physics.update()
+        self.foxy.update(dt, self.player, self.stealth_mode)
+        self.foxy.update_animation(dt)
+
+        # Проверка столкновения в погоне
+        if self.foxy.state == "chasing" and arcade.check_for_collision(self.player, self.foxy):
+            self.game_over = True
+            self.game_over_timer = 0
+            arcade.play_sound(self.foxy.jumpscare_sound)
+            self.player.change_x = 0
+            self.player.change_y = 0
+            self.foxy.change_x = 0
+            self.foxy.change_y = 0
+            print("Foxy caught you! Game Over")
 
     def on_key_press(self, symbol: int, modifiers: int):
         if self.game_over:
