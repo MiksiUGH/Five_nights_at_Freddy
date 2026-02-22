@@ -130,7 +130,7 @@ class Game(View):
         self.bonnie_list.append(self.bonnie)
 
         self.chika = Chika()
-        self.chika.center_x = 2100  # координаты сцены
+        self.chika.center_x = 2100
         self.chika.center_y = 2245
         self.chika_list = arcade.SpriteList()
         self.chika_list.append(self.chika)
@@ -149,8 +149,8 @@ class Game(View):
         self.cupcake_interval = 15.0
 
         self.foxy = Foxy()
-        self.foxy.center_x = 1400  # выберите подходящую позицию
-        self.foxy.center_y = 2000
+        self.foxy.center_x = 2100
+        self.foxy.center_y = 2245
         self.foxy_list = arcade.SpriteList()
         self.foxy_list.append(self.foxy)
 
@@ -176,8 +176,8 @@ class Game(View):
         self.foxy.step_timer = 0
         self.foxy.step_index = 0
         self.foxy.texture = self.foxy.not_activate
-        self.foxy.center_x = 1400
-        self.foxy.center_y = 2000
+        self.foxy.center_x = 3350
+        self.foxy.center_y = 2200
         self.foxy.change_x = 0
         self.foxy.change_y = 0
 
@@ -289,7 +289,7 @@ class Game(View):
         self.center_camera_on_player()
 
         if self.bonnie_physics:
-            self.bonnie_physics.update()  # применяем физику к Бонни
+            self.bonnie_physics.update()
         self.bonnie.update(dt, self.player, self.stealth_mode)
         self.bonnie.update_animation(dt)
 

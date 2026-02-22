@@ -294,7 +294,7 @@ class Foxy(arcade.Sprite):
         self.step_timer = 0.0
         self.step_interval = 25.0
         self.step_chance = 0.5
-        self.chase_speed = 8  # скорость в погоне
+        self.chase_speed = 8
         self.facing_direction = 1
 
         # Начальная текстура
@@ -332,7 +332,7 @@ class Foxy(arcade.Sprite):
                         else:
                             # Атака
                             self.state = "chasing"
-                            self.center_y -= 5  # опускаемся
+                            self.center_y -= 200  # опускаемся
                             self.speed = self.chase_speed
                             self._update_chase_direction(player)
 
