@@ -180,6 +180,12 @@ class Game(View):
         self.foxy.center_y = 2200
         self.foxy.change_x = 0
         self.foxy.change_y = 0
+        self.foxy.last_pos = (self.foxy.center_x, self.foxy.center_y)
+
+        self.bonnie.last_dist_to_player = None
+        self.bonnie.stuck_path_timer = 0
+        self.foxy.last_dist_to_player = None
+        self.foxy.stuck_path_timer = 0
 
     def _place_cupcake_randomly(self):
         """Размещает кекс в случайной позиции, не занятой стенами."""
@@ -284,14 +290,17 @@ class Game(View):
                 self.window.show_view(MainMenu())
             return
 
+        self.bonnie.update(dt, self.player, self.stealth_mode)
+        self.bonnie_physics.update()
+        self.bonnie.update_animation(dt)
+
+        self.foxy.update(dt, self.player, self.stealth_mode)
+        self.foxy_physics.update()
+        self.foxy.update_animation(dt)
+
         self.physics_engine.update()
         self.player.update_animation(dt)
         self.center_camera_on_player()
-
-        if self.bonnie_physics:
-            self.bonnie_physics.update()
-        self.bonnie.update(dt, self.player, self.stealth_mode)
-        self.bonnie.update_animation(dt)
 
         self.chika_physics.update()
 
@@ -343,10 +352,6 @@ class Game(View):
                 self.player.change_x = 0
                 self.player.change_y = 0
                 print("Cupcake caught you!")
-
-        self.foxy_physics.update()
-        self.foxy.update(dt, self.player, self.stealth_mode)
-        self.foxy.update_animation(dt)
 
         # Проверка столкновения в погоне
         if self.foxy.state == "chasing" and arcade.check_for_collision(self.player, self.foxy):

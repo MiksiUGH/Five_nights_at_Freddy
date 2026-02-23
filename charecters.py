@@ -114,22 +114,38 @@ class Bonnie(arcade.Sprite):
         self.stuck_threshold = 0.5  # секунд без движения
         self.last_pos = (self.center_x, self.center_y)
 
-        # Для анимации
         self.cur_texture_index = 0
-        self.animation_time = 0.2
+        self.animation_time = 0.2  # временно, будет заменяться
+        self.patrol_animation_time = 0.25  # медленно при патруле
+        self.chase_animation_time = 0.1  # быстро в погоне
         self.time_since_last_frame = 0
         self.facing_direction = 1
 
         # Таймеры для смены направления в патруле
         self.patrol_timer = 0
-        self.direction_change_interval = random.uniform(2.0, 5.0)  # секунд
+        self.direction_change_interval = random.uniform(2.0, 5.0)
+
+        self.last_dist_to_player = None
+        self.stuck_path_timer = 0
+        self.stuck_path_threshold = 0.5
+
+    def set_state(self, new_state):
+        """Безопасно меняет состояние и обновляет скорость анимации."""
+        if self.state == new_state:
+            return
+        self.state = new_state
+        if new_state == "chase":
+            self.animation_time = self.chase_animation_time
+        elif new_state == "patrol":
+            self.animation_time = self.patrol_animation_time
+        # Для inactive скорость анимации не важна, оставляем как есть
 
     def update(self, dt: float, player: arcade.Sprite, stealth_mode: bool):
         # Если в погоне и игрок в невидимости — теряем цель и возвращаемся к патрулю
         if self.state == "chase" and stealth_mode:
-            self.state = "patrol"
+            self.set_state("patrol")
             self.speed = 4  # исходная скорость патруля
-            self.patrol_timer = 0  # сбросим таймер, чтобы он сразу выбрал направление
+            self.patrol_timer = 0
 
         # Если неактивен — ничего не делаем
         if self.state == "inactive":
@@ -137,51 +153,61 @@ class Bonnie(arcade.Sprite):
             self.change_y = 0
             return
 
-        # Проверка видимости игрока для перехода в погоню (только если не в погоне и игрок видим)
+        # Проверка видимости игрока для перехода в погоню
         if self.state != "chase":
             dist = arcade.get_distance_between_sprites(self, player)
             if dist < 400 and not stealth_mode:
-                self.state = "chase"
+                self.set_state("chase")
                 self.speed = self.chase_speed
-                # Сброс патрульного таймера (не нужен в погоне)
 
         # Обработка текущего состояния
         if self.state == "patrol":
             self._patrol_update(dt)
-        elif self.state == "chase":
-            self._chase_update(player)
+            # Проверка на застревание для patrol
+            if (self.change_x != 0 or self.change_y != 0):
+                if abs(self.center_x - self.last_pos[0]) < 1 and abs(self.center_y - self.last_pos[1]) < 1:
+                    self.stuck_timer += dt
+                else:
+                    self.stuck_timer = 0
+                self.last_pos = (self.center_x, self.center_y)
 
-        if (self.change_x != 0 or self.change_y != 0) and self.state != "inactive":
-            if abs(self.center_x - self.last_pos[0]) < 1 and abs(self.center_y - self.last_pos[1]) < 1:
-                self.stuck_timer += dt
-            else:
-                self.stuck_timer = 0
-            self.last_pos = (self.center_x, self.center_y)
-
-            if self.stuck_timer > self.stuck_threshold:
-                # Застрял — меняем направление
-                if self.state == "patrol":
+                if self.stuck_timer > self.stuck_threshold:
                     angle = random.uniform(0, 2 * math.pi)
                     self.change_x = math.cos(angle) * self.speed
                     self.change_y = math.sin(angle) * self.speed
-                elif self.state == "chase":
-                    dx = player.center_x - self.center_x
-                    dy = player.center_y - self.center_y
-                    dist = math.hypot(dx, dy)
-                    if dist > 0:
-                        if random.random() < 0.5:
-                            # влево
-                            self.change_x = -dy / dist * self.speed
-                            self.change_y = dx / dist * self.speed
-                        else:
-                            # вправо
-                            self.change_x = dy / dist * self.speed
-                            self.change_y = -dx / dist * self.speed
+                    self.stuck_timer = 0
+        elif self.state == "chase":
+            # Обновляем направление, если не в обходе
+            if self.stuck_path_timer <= 0:
+                self._chase_update(player)
+
+            # Проверка на застревание по дистанции
+            current_dist = arcade.get_distance_between_sprites(self, player)
+            if self.last_dist_to_player is not None:
+                # Увеличенный допуск (5 пикселей)
+                if current_dist >= self.last_dist_to_player - 5:
+                    self.stuck_path_timer += dt
+                else:
+                    self.stuck_path_timer = 0
+            self.last_dist_to_player = current_dist
+
+            if self.stuck_path_timer > self.stuck_path_threshold:
+                # Обходное движение (перпендикулярно)
+                dx = player.center_x - self.center_x
+                dy = player.center_y - self.center_y
+                dist = math.hypot(dx, dy)
+                if dist > 0:
+                    if random.random() < 0.5:
+                        self.change_x = -dy / dist * self.speed
+                        self.change_y = dx / dist * self.speed
                     else:
-                        angle = random.uniform(0, 2 * math.pi)
-                        self.change_x = math.cos(angle) * self.speed
-                        self.change_y = math.sin(angle) * self.speed
-                self.stuck_timer = 0
+                        self.change_x = dy / dist * self.speed
+                        self.change_y = -dx / dist * self.speed
+                else:
+                    angle = random.uniform(0, 2 * math.pi)
+                    self.change_x = math.cos(angle) * self.speed
+                    self.change_y = math.sin(angle) * self.speed
+                self.stuck_path_timer = 0
 
     def _patrol_update(self, dt: float):
         """Случайное блуждание."""
@@ -293,7 +319,7 @@ class Foxy(arcade.Sprite):
         self.activation_chance = 0.6
         self.step_timer = 0.0
         self.step_interval = 25.0
-        self.step_chance = 0.5
+        self.step_chance = 0.8
         self.chase_speed = 8
         self.facing_direction = 1
 
@@ -302,8 +328,16 @@ class Foxy(arcade.Sprite):
 
         # Для анимации (как у Bonnie)
         self.cur_texture_index = 0
-        self.animation_time = 0.2
+        self.animation_time = 0.05
         self.time_since_last_frame = 0
+
+        self.stuck_timer = 0
+        self.stuck_threshold = 0.5  # секунд без движения
+        self.last_pos = (self.center_x, self.center_y)
+
+        self.last_dist_to_player = None
+        self.stuck_path_timer = 0
+        self.stuck_path_threshold = 1.0
 
     def update(self, dt: float, player: arcade.Sprite, stealth_mode: bool):
         """Обновление логики Foxy."""
@@ -336,8 +370,37 @@ class Foxy(arcade.Sprite):
                             self.speed = self.chase_speed
                             self._update_chase_direction(player)
 
-        elif self.state == "chasing":
-            self._update_chase_direction(player)
+        if self.state == "chasing":
+            # Обновляем направление к игроку, если не в обходе
+            if self.stuck_path_timer <= 0:
+                self._update_chase_direction(player)
+
+            # Проверка на застревание по дистанции
+            current_dist = arcade.get_distance_between_sprites(self, player)
+            if self.last_dist_to_player is not None:
+                if current_dist >= self.last_dist_to_player - 5:  # допуск 5 пикселей
+                    self.stuck_path_timer += dt
+                else:
+                    self.stuck_path_timer = 0
+            self.last_dist_to_player = current_dist
+
+            if self.stuck_path_timer > self.stuck_path_threshold:
+                # Обходное движение
+                dx = player.center_x - self.center_x
+                dy = player.center_y - self.center_y
+                dist = math.hypot(dx, dy)
+                if dist > 0:
+                    if random.random() < 0.5:
+                        self.change_x = -dy / dist * self.speed
+                        self.change_y = dx / dist * self.speed
+                    else:
+                        self.change_x = dy / dist * self.speed
+                        self.change_y = -dx / dist * self.speed
+                else:
+                    angle = random.uniform(0, 2 * math.pi)
+                    self.change_x = math.cos(angle) * self.speed
+                    self.change_y = math.sin(angle) * self.speed
+                self.stuck_path_timer = 0
 
     def _update_chase_direction(self, player: arcade.Sprite):
         """Направление к игроку для погони."""
