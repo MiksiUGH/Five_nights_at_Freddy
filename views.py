@@ -41,6 +41,7 @@ class MainMenu(View):
 
     def on_hide(self):
         """Вызывается при скрытии вида."""
+        self.manager.clear()
         self.manager.disable()
 
     def on_draw(self):
@@ -51,6 +52,7 @@ class MainMenu(View):
         self.manager.draw()
 
     def on_click_play(self, event):
+        self.manager.disable()
         self.window.show_view(Game())
 
     def on_click_stats(self, event):
@@ -154,6 +156,12 @@ class Game(View):
         self.foxy_list = arcade.SpriteList()
         self.foxy_list.append(self.foxy)
 
+        self.fade_alpha = 0
+        self.fade_speed = 255  # за 1 секунду (при 60 кадрах в секунду, 255/60 ≈ 4.25 за кадр, но мы будем использовать dt)
+        self.fade_state = None  # "fade_in", "fade_out"
+        self.stealth_timer = 0
+        self.max_stealth_time = 7.0
+
         self.bonnie_physics = PhysicsEngineSimple(self.bonnie, (self.wall_list, self.cupcake_list, self.foxy_list))
         self.chika_physics = PhysicsEngineSimple(self.chika, self.wall_list)
         self.foxy_physics = PhysicsEngineSimple(self.foxy, (self.wall_list, self.cupcake_list, self.bonnie_list))
@@ -254,6 +262,18 @@ class Game(View):
             self.cupcake_list.draw()
 
         self.gui_camera.use()
+
+        if self.stealth_mode:
+            # Отображение оставшегося времени (например, текст)
+            remaining = max(0, self.max_stealth_time - self.stealth_timer)
+            arcade.draw_text(f"Укрытие: {remaining:.1f}с",
+                             self.window.width - 20, 60,
+                             arcade.color.WHITE, font_size=16,
+                             anchor_x="right", anchor_y="top")
+
+        # Рисуем затемнение поверх всего
+        arcade.draw_rect_filled(arcade.rect.LRBT(0, self.window.width, 0, self.window.height),
+                                (0, 0, 0, self.fade_alpha))
 
         if self.start_time and not self.game_over:
             elapsed = time.time() - self.start_time
@@ -364,6 +384,25 @@ class Game(View):
             self.foxy.change_y = 0
             print("Foxy caught you! Game Over")
 
+        # Обновление затемнения
+        if self.fade_state == "fade_out":
+            self.fade_alpha = min(200, self.fade_alpha + self.fade_speed * dt)
+            if self.fade_alpha >= 200:
+                self.fade_state = None  # закончили затемнение
+        elif self.fade_state == "fade_in":
+            self.fade_alpha = max(0, self.fade_alpha - self.fade_speed * dt)
+            if self.fade_alpha <= 0:
+                self.fade_state = None
+
+        # Таймер нахождения в укрытии
+        if self.stealth_mode:
+            self.stealth_timer += dt
+            if self.stealth_timer >= self.max_stealth_time:
+                # Принудительный выход
+                self.stealth_mode = False
+                self.player.alpha = 255
+                self.fade_state = "fade_in"
+
     def on_key_press(self, symbol: int, modifiers: int):
         if self.game_over:
             return
@@ -386,6 +425,9 @@ class Game(View):
                     self.player.alpha = 0
                     self.player.change_x = 0
                     self.player.change_y = 0
+                    # Запускаем затемнение
+                    self.fade_state = "fade_out"
+                    self.stealth_timer = 0  # сброс таймера
                     break
 
     def on_key_release(self, symbol: int, modifiers: int):
@@ -415,8 +457,10 @@ class Game(View):
                             self.player.center_x = door.center_x - door.width // 2 - self.player.width // 2 - 30
                     break
         if symbol == arcade.key.SPACE:
-            self.stealth_mode = False
-            self.player.alpha = 255
+            if self.stealth_mode:
+                self.stealth_mode = False
+                self.player.alpha = 255
+                self.fade_state = "fade_in"
 
 
 class PauseMenu(View):
