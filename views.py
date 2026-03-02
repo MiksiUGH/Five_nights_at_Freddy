@@ -92,10 +92,11 @@ class Game(View):
         self.wall_list = None
         self.physics_engine = None
         self.stealth_mode = False
-        self.start_time = None
         self.game_over = False
         self.game_over_timer = 0
         self.game_over_duration = 2.0
+        self.total_play_time = 0.0
+        self.game_initialized = False
 
         self.map = arcade.load_tilemap("maps/fnaf.tmx", scaling=3.7)
         self.scene = arcade.Scene.from_tilemap(self.map)
@@ -162,38 +163,54 @@ class Game(View):
         self.stealth_timer = 0
         self.max_stealth_time = 7.0
 
-        self.bonnie_physics = PhysicsEngineSimple(self.bonnie, (self.wall_list, self.cupcake_list, self.foxy_list))
         self.chika_physics = PhysicsEngineSimple(self.chika, self.wall_list)
-        self.foxy_physics = PhysicsEngineSimple(self.foxy, (self.wall_list, self.cupcake_list, self.bonnie_list))
+        self.bonnie_physics = PhysicsEngineSimple(self.bonnie,
+                                                  (self.wall_list, self.cupcake_list, self.foxy_list))
+        self.foxy_physics = PhysicsEngineSimple(self.foxy,
+                                                (self.wall_list, self.cupcake_list, self.bonnie_list))
 
     def on_show_view(self):
-        self.start_time = time.time()
-        self.activation_timer = 0
-        self.bonnie.last_pos = (self.bonnie.center_x, self.bonnie.center_y)
-        self.game_over = False
+        if not self.game_initialized:
+            # Первый запуск — инициализация всех состояний
+            self.total_play_time = 0.0
+            self.activation_timer = 0
+            self.bonnie.last_pos = (self.bonnie.center_x, self.bonnie.center_y)
+            self.bonnie.state = "inactive"
+            self.bonnie.texture = self.bonnie.not_activate
 
-        self.chika_activation_timer = 0
-        self.chika_activated = False
-        self.chika.alpha = 255
-        self.chika.texture = self.chika.not_activate
-        self.cupcake_sprite.alpha = 0
-        self.cupcake_timer = 0
+            self.chika_activation_timer = 0
+            self.chika_activated = False
+            self.chika.alpha = 255
+            self.chika.texture = self.chika.not_activate
+            self.cupcake_sprite.alpha = 0
+            self.cupcake_timer = 0
 
-        self.foxy.state = "inactive"
-        self.foxy.activation_timer = 0
-        self.foxy.step_timer = 0
-        self.foxy.step_index = 0
-        self.foxy.texture = self.foxy.not_activate
-        self.foxy.center_x = 3350
-        self.foxy.center_y = 2200
-        self.foxy.change_x = 0
-        self.foxy.change_y = 0
-        self.foxy.last_pos = (self.foxy.center_x, self.foxy.center_y)
+            self.foxy.state = "inactive"
+            self.foxy.activation_timer = 0
+            self.foxy.step_timer = 0
+            self.foxy.step_index = 0
+            self.foxy.texture = self.foxy.not_activate
+            self.foxy.center_x = 3350
+            self.foxy.center_y = 2200
+            self.foxy.change_x = 0
+            self.foxy.change_y = 0
+            self.foxy.last_pos = (self.foxy.center_x, self.foxy.center_y)
 
-        self.bonnie.last_dist_to_player = None
-        self.bonnie.stuck_path_timer = 0
-        self.foxy.last_dist_to_player = None
-        self.foxy.stuck_path_timer = 0
+            self.bonnie.last_dist_to_player = None
+            self.bonnie.stuck_path_timer = 0
+            self.foxy.last_dist_to_player = None
+            self.foxy.stuck_path_timer = 0
+
+            self.game_initialized = True
+        else:
+            # Возврат из паузы — только сброс game_over и stealth_mode
+            self.game_over = False
+            self.game_over_timer = 0
+            self.stealth_mode = False
+            self.player.alpha = 255
+            self.fade_alpha = 0
+            self.fade_state = None
+            # Не сбрасываем позиции и состояния аниматроников!
 
     def _place_cupcake_randomly(self):
         """Размещает кекс в случайной позиции, не занятой стенами."""
@@ -275,15 +292,14 @@ class Game(View):
         arcade.draw_rect_filled(arcade.rect.LRBT(0, self.window.width, 0, self.window.height),
                                 (0, 0, 0, self.fade_alpha))
 
-        if self.start_time and not self.game_over:
-            elapsed = time.time() - self.start_time
-            minutes = int(elapsed // 60)
-            seconds = int(elapsed % 60)
+        if not self.game_over:
+            minutes = int(self.total_play_time // 60)
+            seconds = int(self.total_play_time % 60)
             time_str = f"{minutes:02d}:{seconds:02d}"
             arcade.draw_text(
                 time_str,
-                self.window.width - 20,  # отступ справа
-                self.window.height - 20,  # отступ сверху
+                self.window.width - 20,
+                self.window.height - 20,
                 arcade.color.WHITE,
                 font_size=20,
                 anchor_x="right",
@@ -310,12 +326,16 @@ class Game(View):
                 self.window.show_view(MainMenu())
             return
 
+        self.total_play_time += dt
+
         self.bonnie.update(dt, self.player, self.stealth_mode)
         self.bonnie_physics.update()
+        self.bonnie.check_doors(self.doors_list, dt)
         self.bonnie.update_animation(dt)
 
         self.foxy.update(dt, self.player, self.stealth_mode)
         self.foxy_physics.update()
+        self.foxy.check_doors(self.doors_list, dt)
         self.foxy.update_animation(dt)
 
         self.physics_engine.update()

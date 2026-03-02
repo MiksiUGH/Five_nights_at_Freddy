@@ -128,6 +128,28 @@ class Bonnie(arcade.Sprite):
         self.last_dist_to_player = None
         self.stuck_path_timer = 0
         self.stuck_path_threshold = 0.5
+        self.teleport_cooldown = 0
+
+    def check_doors(self, doors_list: arcade.SpriteList, dt: float):
+        """Проверка столкновения с дверями и телепортация."""
+        if self.teleport_cooldown > 0:
+            self.teleport_cooldown -= dt
+        if self.teleport_cooldown <= 0:
+            door_hit = arcade.check_for_collision_with_list(self, doors_list)
+            if door_hit:
+                door = door_hit[0]
+                orientation = door.properties.get("orientation", None)
+                if orientation is not None:  # вертикальная дверь
+                    if self.center_y < door.center_y:
+                        self.center_y = door.center_y + door.height // 2 + self.height // 2 + 30
+                    else:
+                        self.center_y = door.center_y - door.height // 2 - self.height // 2 - 30
+                else:  # горизонтальная
+                    if self.center_x < door.center_x:
+                        self.center_x = door.center_x + door.width // 2 + self.width // 2 + 30
+                    else:
+                        self.center_x = door.center_x - door.width // 2 - self.width // 2 - 30
+                self.teleport_cooldown = 0.5
 
     def set_state(self, new_state):
         """Безопасно меняет состояние и обновляет скорость анимации."""
@@ -338,6 +360,28 @@ class Foxy(arcade.Sprite):
         self.last_dist_to_player = None
         self.stuck_path_timer = 0
         self.stuck_path_threshold = 1.0
+        self.teleport_cooldown = 0
+
+    def check_doors(self, doors_list: arcade.SpriteList, dt: float):
+        """Проверка столкновения с дверями и телепортация."""
+        if self.teleport_cooldown > 0:
+            self.teleport_cooldown -= dt
+        if self.teleport_cooldown <= 0:
+            door_hit = arcade.check_for_collision_with_list(self, doors_list)
+            if door_hit:
+                door = door_hit[0]
+                orientation = door.properties.get("orientation", None)
+                if orientation is not None:
+                    if self.center_y < door.center_y:
+                        self.center_y = door.center_y + door.height // 2 + self.height // 2 + 30
+                    else:
+                        self.center_y = door.center_y - door.height // 2 - self.height // 2 - 30
+                else:
+                    if self.center_x < door.center_x:
+                        self.center_x = door.center_x + door.width // 2 + self.width // 2 + 30
+                    else:
+                        self.center_x = door.center_x - door.width // 2 - self.width // 2 - 30
+                self.teleport_cooldown = 0.5
 
     def update(self, dt: float, player: arcade.Sprite, stealth_mode: bool):
         """Обновление логики Foxy."""
@@ -453,11 +497,3 @@ class Foxy(arcade.Sprite):
                 self.texture = self.idle_texture
             self.cur_texture_index = 0
             self.time_since_last_frame = 0
-
-
-class Springtrap(arcade.Sprite):
-    ...
-
-
-class ShuteredFreddy(arcade.Sprite):
-    ...
