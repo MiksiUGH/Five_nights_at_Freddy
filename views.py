@@ -1,5 +1,6 @@
 from arcade import View, PhysicsEngineSimple, Camera2D
-import arcade, time, random
+import arcade, random
+from pyglet.gl import GL_ONE
 from arcade.gui import UIManager, UIBoxLayout, UIFlatButton, UIAnchorLayout
 from charecters import NightGuard, Bonnie, Freddy, Chika, Foxy
 
@@ -97,6 +98,13 @@ class Game(View):
         self.game_over_duration = 2.0
         self.total_play_time = 0.0
         self.game_initialized = False
+        self.light_radius = 300
+        light_texture = arcade.make_circle_texture(self.light_radius * 2, (255, 255, 255, 255))
+        self.light_sprite = arcade.Sprite(light_texture)
+        self.light_sprite.alpha = 40
+
+        self.light_sprite_list = arcade.SpriteList()
+        self.light_sprite_list.append(self.light_sprite)
 
         self.map = arcade.load_tilemap("maps/fnaf.tmx", scaling=3.7)
         self.scene = arcade.Scene.from_tilemap(self.map)
@@ -280,15 +288,27 @@ class Game(View):
 
         self.gui_camera.use()
 
+        # Затемнение (фоновое)
+        arcade.draw_rect_filled(arcade.rect.LRBT(0, self.window.width, 0, self.window.height),
+                                (0, 0, 0, 180))
+
+        screen_pos = self.world_camera.project(self.player.position)
+        self.light_sprite.position = screen_pos
+
+        # Аддитивное смешивание для света
+        original_blend = self.window.ctx.blend_func
+        self.window.ctx.blend_func = (GL_ONE, GL_ONE)
+        self.light_sprite_list.draw()
+        self.window.ctx.blend_func = original_blend
+
         if self.stealth_mode:
-            # Отображение оставшегося времени (например, текст)
             remaining = max(0, self.max_stealth_time - self.stealth_timer)
             arcade.draw_text(f"Укрытие: {remaining:.1f}с",
                              self.window.width - 20, 60,
                              arcade.color.WHITE, font_size=16,
                              anchor_x="right", anchor_y="top")
 
-        # Рисуем затемнение поверх всего
+        # Затемнение укрытия (отдельное)
         arcade.draw_rect_filled(arcade.rect.LRBT(0, self.window.width, 0, self.window.height),
                                 (0, 0, 0, self.fade_alpha))
 
