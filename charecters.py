@@ -71,7 +71,16 @@ class NightGuard(arcade.Sprite):
 
 
 class Freddy(arcade.Sprite):
-    ...
+    def __init__(self):
+        super().__init__(scale=1.3)
+
+        self.jumpscare = arcade.load_texture('images/freddy/jumpscare.jpg')  # предположим, такие файлы есть
+        self.jumpscare_sound = arcade.load_sound('sounds/scearm_sound.mp3')  # можно отдельный звук
+        self.not_activate = arcade.load_texture('images/freddy/sprite00.png')
+
+        self.state = "inactive"
+        self.texture = self.not_activate
+        self.alpha = 255
 
 
 class Bonnie(arcade.Sprite):

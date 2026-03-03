@@ -173,7 +173,31 @@ class Game(View):
         self.stealth_timer = 0
         self.max_stealth_time = 7.0
 
+        self.freddy = Freddy()
+        self.freddy.center_x = 1850
+        self.freddy.center_y = 2245
+        self.freddy_list = arcade.SpriteList()
+        self.freddy_list.append(self.freddy)
+
+        self.freddy_activated = False
+        self.freddy_activation_timer = 0
+        self.freddy_activation_interval = 20.0
+        self.freddy_activation_chance = 0.7
+
+        # Параметры зоны и тряски
+        self.zone_size = 500  # размер квадрата зоны (ширина и высота)
+        self.time_in_zone_threshold = 20.0  # секунд до начала тряски
+        self.shake_duration = 5.0  # секунд тряски до скримера
+        self.max_shake_amplitude = 10  # максимальное смещение
+        self.shake_timer = 0.0
+        self.shake_active = False
+
+        self.camera_target = (self.player.center_x, self.player.center_y)
+        self.stationary_center = None
+        self.stationary_timer = 0.0
+
         self.chika_physics = PhysicsEngineSimple(self.chika, self.wall_list)
+        self.freddy_physics = PhysicsEngineSimple(self.freddy, self.wall_list)
         self.bonnie_physics = PhysicsEngineSimple(self.bonnie,
                                                   (self.wall_list, self.cupcake_list, self.foxy_list))
         self.foxy_physics = PhysicsEngineSimple(self.foxy,
@@ -210,6 +234,14 @@ class Game(View):
             self.bonnie.stuck_path_timer = 0
             self.foxy.last_dist_to_player = None
             self.foxy.stuck_path_timer = 0
+
+            self.freddy.state = "inactive"
+            self.freddy.texture = self.freddy.not_activate
+            self.freddy.alpha = 255
+            self.freddy_activated = False
+            self.freddy_activation_timer = 0
+            self.stationary_center = None
+            self.stationary_timer = 0.0
 
             self.game_initialized = True
         else:
@@ -273,7 +305,7 @@ class Game(View):
         smooth_y = (1 - camera_lerp) * cam_y + camera_lerp * target_y
         self.cam_target = (smooth_x, smooth_y)
 
-        self.world_camera.position = (self.cam_target[0], self.cam_target[1])
+        self.camera_target = (self.cam_target[0], self.cam_target[1])
 
     def on_draw(self):
         self.clear()
@@ -285,6 +317,7 @@ class Game(View):
         self.bonnie_list.draw()
         self.chika_list.draw()
         self.foxy_list.draw()
+        self.freddy_list.draw()
         if self.chika_activated:
             self.cupcake_list.draw()
 
@@ -336,6 +369,8 @@ class Game(View):
                 texture = self.chika.jumpscare
             elif arcade.check_for_collision_with_list(self.player, self.foxy_list):
                 texture = self.foxy.jumpscare
+            else:
+                texture = self.freddy.jumpscare
 
             arcade.draw_texture_rect(
                 texture, arcade.LBWH(0, 0, self.width, self.height),
@@ -382,6 +417,85 @@ class Game(View):
         self.center_camera_on_player()
 
         self.chika_physics.update()
+
+        self.freddy_physics.update()
+        if not self.freddy_activated:
+            dist = arcade.get_distance_between_sprites(self.player, self.freddy)
+            if dist <= self.inner_radius:
+                self.freddy.alpha = 255
+            elif dist < self.outer_radius:
+                factor = (dist - self.inner_radius) / (self.outer_radius - self.inner_radius)
+                self.freddy.alpha = int(255 * (1 - factor))
+            else:
+                self.freddy.alpha = 0
+        else:
+            self.freddy.alpha = 0  # после активации всегда невидим
+
+        if not self.freddy_activated:
+            self.freddy_activation_timer += dt
+            if self.freddy_activation_timer >= self.freddy_activation_interval:
+                self.freddy_activation_timer = 0
+                if random.random() < self.freddy_activation_chance:
+                    self.freddy_activated = True
+                    self.freddy.alpha = 0  # исчезает
+                    print("Freddy activated!")
+
+        if self.freddy_activated:
+            # Стационарная зона
+            if self.stationary_center is None:
+                # Запоминаем текущую позицию как центр зоны
+                self.stationary_center = (self.player.center_x, self.player.center_y)
+                self.stationary_timer = 0.0
+            else:
+                # Проверяем, не вышел ли игрок за пределы квадрата
+                dx = self.player.center_x - self.stationary_center[0]
+                dy = self.player.center_y - self.stationary_center[1]
+                if abs(dx) > self.zone_size / 2 or abs(dy) > self.zone_size / 2:
+                    # Вышел – сбрасываем и запоминаем новую позицию
+                    self.stationary_center = (self.player.center_x, self.player.center_y)
+                    self.stationary_timer = 0.0
+                    self.shake_active = False
+                    self.shake_timer = 0.0
+                else:
+                    self.stationary_timer += dt
+
+            # Включение тряски
+            if self.stationary_timer >= self.time_in_zone_threshold and not self.shake_active:
+                self.shake_active = True
+                self.shake_timer = 0.0
+
+            # Обработка тряски
+            if self.shake_active:
+                self.shake_timer += dt
+                progress = min(self.shake_timer / self.shake_duration, 1.0)
+                amplitude = progress * self.max_shake_amplitude
+                offset_x = random.uniform(-amplitude, amplitude)
+                offset_y = random.uniform(-amplitude, amplitude)
+                base_x, base_y = self.camera_target
+                new_x = base_x + offset_x
+                new_y = base_y + offset_y
+                half_w = self.world_camera.viewport_width / 2
+                half_h = self.world_camera.viewport_height / 2
+                new_x = max(half_w, min(self.world_width - half_w, new_x))
+                new_y = max(half_h, min(self.world_height - half_h, new_y))
+                self.world_camera.position = (new_x, new_y)
+
+                if self.shake_timer >= self.shake_duration:
+                    self.game_over = True
+                    self.game_over_timer = 0
+                    arcade.play_sound(self.freddy.jumpscare_sound)
+                    self.player.change_x = 0
+                    self.player.change_y = 0
+                    print("Freddy jumpscare!")
+            else:
+                self.world_camera.position = self.camera_target
+
+        else:
+            self.stationary_center = None
+            self.stationary_timer = 0.0
+            self.shake_active = False
+            self.shake_timer = 0.0
+            self.world_camera.position = self.camera_target
 
         if not self.chika_activated:
             dist_chika = arcade.get_distance_between_sprites(self.player, self.chika)
