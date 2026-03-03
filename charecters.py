@@ -300,7 +300,7 @@ class Chika(arcade.Sprite):
 
         self.state = "inactive"  # inactive, active
         self.texture = self.not_activate
-        self.alpha = 255
+        self.alpha = 0
 
 
 class Foxy(arcade.Sprite):

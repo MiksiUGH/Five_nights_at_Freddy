@@ -98,7 +98,7 @@ class Game(View):
         self.game_over_duration = 2.0
         self.total_play_time = 0.0
         self.game_initialized = False
-        self.light_radius = 300
+        self.light_radius = 320
         light_texture = arcade.make_circle_texture(self.light_radius * 2, (255, 255, 255, 255))
         self.light_sprite = arcade.Sprite(light_texture)
         self.light_sprite.alpha = 40
@@ -132,6 +132,8 @@ class Game(View):
         self.bonnie_physics = None
         self.activation_timer = 0
         self.activation_interval = 10.0  # каждые 10 секунд
+        self.inner_radius = 320   # радиус полной видимости (внутри светового круга)
+        self.outer_radius = 520   # радиус, за которым объекты полностью невидимы
 
         # Создаём Бонни и добавляем в список
         self.bonnie = Bonnie()
@@ -290,7 +292,7 @@ class Game(View):
 
         # Затемнение (фоновое)
         arcade.draw_rect_filled(arcade.rect.LRBT(0, self.window.width, 0, self.window.height),
-                                (0, 0, 0, 180))
+                                (0, 0, 0, 160))
 
         screen_pos = self.world_camera.project(self.player.position)
         self.light_sprite.position = screen_pos
@@ -352,17 +354,56 @@ class Game(View):
         self.bonnie_physics.update()
         self.bonnie.check_doors(self.doors_list, dt)
         self.bonnie.update_animation(dt)
+        dist = arcade.get_distance_between_sprites(self.player, self.bonnie)
+        if dist <= self.inner_radius:
+            self.bonnie.alpha = 255
+        elif dist < self.outer_radius:
+            # Линейное убывание от 255 до 0
+            factor = (dist - self.inner_radius) / (self.outer_radius - self.inner_radius)
+            self.bonnie.alpha = int(255 * (1 - factor))
+        else:
+            self.bonnie.alpha = 0
 
         self.foxy.update(dt, self.player, self.stealth_mode)
         self.foxy_physics.update()
         self.foxy.check_doors(self.doors_list, dt)
         self.foxy.update_animation(dt)
+        dist = arcade.get_distance_between_sprites(self.player, self.foxy)
+        if dist <= self.inner_radius:
+            self.foxy.alpha = 255
+        elif dist < self.outer_radius:
+            factor = (dist - self.inner_radius) / (self.outer_radius - self.inner_radius)
+            self.foxy.alpha = int(255 * (1 - factor))
+        else:
+            self.foxy.alpha = 0
 
         self.physics_engine.update()
         self.player.update_animation(dt)
         self.center_camera_on_player()
 
         self.chika_physics.update()
+
+        if not self.chika_activated:
+            dist_chika = arcade.get_distance_between_sprites(self.player, self.chika)
+            if dist_chika <= self.inner_radius:
+                self.chika.alpha = 255
+            elif dist_chika < self.outer_radius:
+                factor = (dist_chika - self.inner_radius) / (self.outer_radius - self.inner_radius)
+                self.chika.alpha = int(255 * (1 - factor))
+            else:
+                self.chika.alpha = 0
+
+        if self.chika_activated:
+            dist_cupcake = arcade.get_distance_between_sprites(self.player, self.cupcake_sprite)
+            if dist_cupcake <= self.inner_radius:
+                self.cupcake_sprite.alpha = 255
+            elif dist_cupcake < self.outer_radius:
+                factor = (dist_cupcake - self.inner_radius) / (self.outer_radius - self.inner_radius)
+                self.cupcake_sprite.alpha = int(255 * (1 - factor))
+            else:
+                self.cupcake_sprite.alpha = 0
+        else:
+            self.cupcake_sprite.alpha = 0
 
         # Проверка столкновения Бонни с игроком
         if not self.stealth_mode and arcade.check_for_collision(self.player, self.bonnie):
@@ -393,7 +434,6 @@ class Game(View):
                 if random.random() < 0.7:
                     self.chika_activated = True
                     self.chika.alpha = 0  # Чика исчезает
-                    self.cupcake_sprite.alpha = 255
                     self._place_cupcake_randomly()
                     print("Chika activated, cupcake spawned!")
         else:
