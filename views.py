@@ -1,13 +1,25 @@
-from arcade import View, PhysicsEngineSimple, Camera2D
-import arcade, random
+"""Модуль представлений (экранов) игры.
+
+Содержит классы главного меню, игрового процесса, меню паузы и статистики.
+"""
+
+
+import random
+import arcade
 from pyglet.gl import GL_ONE
+from arcade import View, PhysicsEngineSimple, Camera2D
 from arcade.gui import UIManager, UIBoxLayout, UIFlatButton, UIAnchorLayout
 from charecters import NightGuard, Bonnie, Freddy, Chika, Foxy
+from database import init_db, save_result, get_top_results
 
 
 class MainMenu(View):
+    """Главное меню игры с кнопками «Играть» и «Посмотреть статистику»."""
+
     def __init__(self):
+        """Загружает фон, создаёт кнопки и настраивает управление с клавиатуры."""
         super().__init__()
+        init_db()
 
         try:
             self.background = arcade.load_texture("images/background.png")
@@ -36,30 +48,33 @@ class MainMenu(View):
         self._update_selection()
 
     def on_show(self):
-        """Вызывается при показе вида."""
+        """Вызывается при показе вида — включает менеджер и курсор."""
         self.manager.enable()
         self.window.set_mouse_visible(True)
 
     def on_hide(self):
-        """Вызывается при скрытии вида."""
+        """Вызывается при скрытии вида — очищает и отключает менеджер."""
         self.manager.clear()
         self.manager.disable()
 
     def on_draw(self):
-        """Отрисовка."""
+        """Отрисовывает фон и кнопки."""
         self.clear()
         arcade.draw_texture_rect(self.background,
                                  arcade.rect.XYWH(self.width // 2, self.height // 2, self.width, self.height))
         self.manager.draw()
 
     def on_click_play(self, event):
+        """Переход в игровое окно."""
         self.manager.disable()
         self.window.show_view(Game())
 
     def on_click_stats(self, event):
+        """Переход в окно статистики."""
         self.window.show_view(StaticMenu())
 
-    def on_key_release(self, symbol: int, modifiers: int) -> None:
+    def on_key_release(self, symbol: int, modifiers: int):
+        """Обрабатывает клавиши вверх/вниз для выбора кнопки и Enter для подтверждения."""
         if symbol == arcade.key.UP:
             self.selected_index = (self.selected_index - 1) % len(self.buttons)
             self._update_selection()
@@ -73,7 +88,7 @@ class MainMenu(View):
                 self.on_click_stats(None)
 
     def _update_selection(self):
-        """Визуально выделяем выбранную кнопку."""
+        """Визуально выделяет выбранную кнопку."""
         for i, btn in enumerate(self.buttons):
             if i == self.selected_index:
                 btn.color = arcade.color.LIGHT_BLUE
@@ -86,8 +101,16 @@ class MainMenu(View):
 
 
 class Game(View):
+    """Основной игровой процесс.
+
+    Управляет игроком, аниматрониками, физикой, камерой, затемнением и сохранением результатов.
+    """
+
     def __init__(self):
+        """Загружает карту, создаёт игрока и всех аниматроников, настраивает камеры и физику."""
         super().__init__()
+
+        self.result_saved = False
         self.scene = None
         self.map = None
         self.wall_list = None
@@ -131,13 +154,11 @@ class Game(View):
         self.bonnie_list = arcade.SpriteList()
         self.bonnie_physics = None
         self.activation_timer = 0
-        self.activation_interval = 10.0  # каждые 10 секунд
-        self.inner_radius = 320   # радиус полной видимости (внутри светового круга)
-        self.outer_radius = 520   # радиус, за которым объекты полностью невидимы
+        self.activation_interval = 10.0
+        self.inner_radius = 320
+        self.outer_radius = 520
 
-        # Создаём Бонни и добавляем в список
         self.bonnie = Bonnie()
-        # Установим начальную позицию (подбери координаты, где Бонни должен появиться)
         self.bonnie.center_x = 1600
         self.bonnie.center_y = 2255
         self.bonnie_list.append(self.bonnie)
@@ -148,7 +169,6 @@ class Game(View):
         self.chika_list = arcade.SpriteList()
         self.chika_list.append(self.chika)
 
-        # Кекс
         self.cupcake_sprite = arcade.Sprite(self.chika.cupcake, scale=0.05)
         self.cupcake_sprite.alpha = 0
         self.cupcake_list = arcade.SpriteList()
@@ -168,8 +188,8 @@ class Game(View):
         self.foxy_list.append(self.foxy)
 
         self.fade_alpha = 0
-        self.fade_speed = 255  # за 1 секунду (при 60 кадрах в секунду, 255/60 ≈ 4.25 за кадр, но мы будем использовать dt)
-        self.fade_state = None  # "fade_in", "fade_out"
+        self.fade_speed = 255
+        self.fade_state = None
         self.stealth_timer = 0
         self.max_stealth_time = 7.0
 
@@ -184,11 +204,10 @@ class Game(View):
         self.freddy_activation_interval = 20.0
         self.freddy_activation_chance = 0.7
 
-        # Параметры зоны и тряски
-        self.zone_size = 500  # размер квадрата зоны (ширина и высота)
-        self.time_in_zone_threshold = 20.0  # секунд до начала тряски
-        self.shake_duration = 5.0  # секунд тряски до скримера
-        self.max_shake_amplitude = 10  # максимальное смещение
+        self.zone_size = 500
+        self.time_in_zone_threshold = 20.0
+        self.shake_duration = 5.0
+        self.max_shake_amplitude = 10
         self.shake_timer = 0.0
         self.shake_active = False
 
@@ -203,9 +222,16 @@ class Game(View):
         self.foxy_physics = PhysicsEngineSimple(self.foxy,
                                                 (self.wall_list, self.cupcake_list, self.bonnie_list))
 
+    def save_result(self):
+        """Сохраняет текущее время игры в базу данных (только один раз)."""
+        if not self.result_saved:
+            save_result(self.total_play_time)
+            self.result_saved = True
+
     def on_show_view(self):
+        """Вызывается при показе игрового окна — инициализирует или возобновляет игру."""
         if not self.game_initialized:
-            # Первый запуск — инициализация всех состояний
+            self.result_saved = False
             self.total_play_time = 0.0
             self.activation_timer = 0
             self.bonnie.last_pos = (self.bonnie.center_x, self.bonnie.center_y)
@@ -245,18 +271,16 @@ class Game(View):
 
             self.game_initialized = True
         else:
-            # Возврат из паузы — только сброс game_over и stealth_mode
             self.game_over = False
             self.game_over_timer = 0
             self.stealth_mode = False
             self.player.alpha = 255
             self.fade_alpha = 0
             self.fade_state = None
-            # Не сбрасываем позиции и состояния аниматроников!
 
     def _place_cupcake_randomly(self):
-        """Размещает кекс в случайной позиции, не занятой стенами."""
-        for _ in range(100):  # максимум 100 попыток
+        """Размещает кекс в случайной позиции, не занятой стенами или дверями."""
+        for _ in range(100):
             x = random.uniform(42, self.world_width - 42)
             y = random.uniform(42, self.world_height - 42)
             self.cupcake_sprite.position = (x, y)
@@ -270,8 +294,7 @@ class Game(View):
         self.cupcake_sprite.position = (x, y)
 
     def center_camera_on_player(self):
-        """Перемещает мировую камеру так, чтобы игрок был в центре экрана,
-        с учётом границ карты."""
+        """Плавно перемещает мировую камеру так, чтобы игрок оставался в центре, с учётом границ."""
         dead_zone_h = int(self.window.height * 0.45)
         dead_zone_w = int(self.window.width * 0.35)
         camera_lerp = 1.1
@@ -308,6 +331,7 @@ class Game(View):
         self.camera_target = (self.cam_target[0], self.cam_target[1])
 
     def on_draw(self):
+        """Отрисовывает все игровые объекты, затемнение и свет."""
         self.clear()
 
         self.world_camera.use()
@@ -323,14 +347,12 @@ class Game(View):
 
         self.gui_camera.use()
 
-        # Затемнение (фоновое)
         arcade.draw_rect_filled(arcade.rect.LRBT(0, self.window.width, 0, self.window.height),
                                 (0, 0, 0, 160))
 
         screen_pos = self.world_camera.project(self.player.position)
         self.light_sprite.position = screen_pos
 
-        # Аддитивное смешивание для света
         original_blend = self.window.ctx.blend_func
         self.window.ctx.blend_func = (GL_ONE, GL_ONE)
         self.light_sprite_list.draw()
@@ -343,7 +365,6 @@ class Game(View):
                              arcade.color.WHITE, font_size=16,
                              anchor_x="right", anchor_y="top")
 
-        # Затемнение укрытия (отдельное)
         arcade.draw_rect_filled(arcade.rect.LRBT(0, self.window.width, 0, self.window.height),
                                 (0, 0, 0, self.fade_alpha))
 
@@ -362,7 +383,6 @@ class Game(View):
             )
 
         if self.game_over:
-            texture = None
             if arcade.check_for_collision_with_list(self.player, self.bonnie_list):
                 texture = self.bonnie.jumpscare
             elif arcade.check_for_collision_with_list(self.player, self.cupcake_list):
@@ -377,7 +397,9 @@ class Game(View):
             )
 
     def on_update(self, dt: float):
+        """Обновляет состояние игры: движение, аниматроников, камеру, тряску."""
         if self.game_over:
+            self.save_result()
             self.game_over_timer += dt
             if self.game_over_timer >= self.game_over_duration:
                 self.window.show_view(MainMenu())
@@ -393,7 +415,6 @@ class Game(View):
         if dist <= self.inner_radius:
             self.bonnie.alpha = 255
         elif dist < self.outer_radius:
-            # Линейное убывание от 255 до 0
             factor = (dist - self.inner_radius) / (self.outer_radius - self.inner_radius)
             self.bonnie.alpha = int(255 * (1 - factor))
         else:
@@ -429,7 +450,7 @@ class Game(View):
             else:
                 self.freddy.alpha = 0
         else:
-            self.freddy.alpha = 0  # после активации всегда невидим
+            self.freddy.alpha = 0
 
         if not self.freddy_activated:
             self.freddy_activation_timer += dt
@@ -437,21 +458,16 @@ class Game(View):
                 self.freddy_activation_timer = 0
                 if random.random() < self.freddy_activation_chance:
                     self.freddy_activated = True
-                    self.freddy.alpha = 0  # исчезает
-                    print("Freddy activated!")
+                    self.freddy.alpha = 0
 
         if self.freddy_activated:
-            # Стационарная зона
             if self.stationary_center is None:
-                # Запоминаем текущую позицию как центр зоны
                 self.stationary_center = (self.player.center_x, self.player.center_y)
                 self.stationary_timer = 0.0
             else:
-                # Проверяем, не вышел ли игрок за пределы квадрата
                 dx = self.player.center_x - self.stationary_center[0]
                 dy = self.player.center_y - self.stationary_center[1]
                 if abs(dx) > self.zone_size / 2 or abs(dy) > self.zone_size / 2:
-                    # Вышел – сбрасываем и запоминаем новую позицию
                     self.stationary_center = (self.player.center_x, self.player.center_y)
                     self.stationary_timer = 0.0
                     self.shake_active = False
@@ -459,12 +475,10 @@ class Game(View):
                 else:
                     self.stationary_timer += dt
 
-            # Включение тряски
             if self.stationary_timer >= self.time_in_zone_threshold and not self.shake_active:
                 self.shake_active = True
                 self.shake_timer = 0.0
 
-            # Обработка тряски
             if self.shake_active:
                 self.shake_timer += dt
                 progress = min(self.shake_timer / self.shake_duration, 1.0)
@@ -486,7 +500,6 @@ class Game(View):
                     arcade.play_sound(self.freddy.jumpscare_sound)
                     self.player.change_x = 0
                     self.player.change_y = 0
-                    print("Freddy jumpscare!")
             else:
                 self.world_camera.position = self.camera_target
 
@@ -519,7 +532,6 @@ class Game(View):
         else:
             self.cupcake_sprite.alpha = 0
 
-        # Проверка столкновения Бонни с игроком
         if not self.stealth_mode and arcade.check_for_collision(self.player, self.bonnie):
             self.game_over = True
             self.game_over_timer = 0
@@ -528,18 +540,15 @@ class Game(View):
             self.player.change_y = 0
             self.bonnie.change_x = 0
             self.bonnie.change_y = 0
-            print("Bonnie caught you! Game Over")
 
-        # Таймер активации Бонни (каждые 10 секунд)
         self.activation_timer += dt
         if self.activation_timer >= self.activation_interval:
             self.activation_timer = 0
             if self.bonnie.state == "inactive":
-                if random.random() < 0.8:  # 80% шанс
+                if random.random() < 0.8:
                     self.bonnie.state = "patrol"
                     self.bonnie.texture = self.bonnie.idle_texture
                     self.bonnie.center_y = 2250
-                    print("Bonnie activated!")
 
         if not self.chika_activated:
             self.chika_activation_timer += dt
@@ -547,17 +556,14 @@ class Game(View):
                 self.chika_activation_timer = 0
                 if random.random() < 0.7:
                     self.chika_activated = True
-                    self.chika.alpha = 0  # Чика исчезает
+                    self.chika.alpha = 0
                     self._place_cupcake_randomly()
-                    print("Chika activated, cupcake spawned!")
         else:
             self.cupcake_timer += dt
             if self.cupcake_timer >= self.cupcake_interval:
                 self.cupcake_timer = 0
                 self._place_cupcake_randomly()
-                print("Cupcake moved")
 
-            # Проверка столкновения с кексом
         if self.chika_activated and not self.stealth_mode:
             if arcade.check_for_collision(self.player, self.cupcake_sprite):
                 self.game_over = True
@@ -565,9 +571,7 @@ class Game(View):
                 arcade.play_sound(self.chika.jumpscare_sound)
                 self.player.change_x = 0
                 self.player.change_y = 0
-                print("Cupcake caught you!")
 
-        # Проверка столкновения в погоне
         if self.foxy.state == "chasing" and arcade.check_for_collision(self.player, self.foxy):
             self.game_over = True
             self.game_over_timer = 0
@@ -576,28 +580,25 @@ class Game(View):
             self.player.change_y = 0
             self.foxy.change_x = 0
             self.foxy.change_y = 0
-            print("Foxy caught you! Game Over")
 
-        # Обновление затемнения
         if self.fade_state == "fade_out":
             self.fade_alpha = min(200, self.fade_alpha + self.fade_speed * dt)
             if self.fade_alpha >= 200:
-                self.fade_state = None  # закончили затемнение
+                self.fade_state = None
         elif self.fade_state == "fade_in":
             self.fade_alpha = max(0, self.fade_alpha - self.fade_speed * dt)
             if self.fade_alpha <= 0:
                 self.fade_state = None
 
-        # Таймер нахождения в укрытии
         if self.stealth_mode:
             self.stealth_timer += dt
             if self.stealth_timer >= self.max_stealth_time:
-                # Принудительный выход
                 self.stealth_mode = False
                 self.player.alpha = 255
                 self.fade_state = "fade_in"
 
     def on_key_press(self, symbol: int, modifiers: int):
+        """Обрабатывает нажатия клавиш: движение, вход в укрытие."""
         if self.game_over:
             return
         if not self.stealth_mode:
@@ -619,12 +620,12 @@ class Game(View):
                     self.player.alpha = 0
                     self.player.change_x = 0
                     self.player.change_y = 0
-                    # Запускаем затемнение
                     self.fade_state = "fade_out"
-                    self.stealth_timer = 0  # сброс таймера
+                    self.stealth_timer = 0
                     break
 
     def on_key_release(self, symbol: int, modifiers: int):
+        """Обрабатывает отпускание клавиш: остановка, пауза, выход из укрытия, проход через двери."""
         if self.game_over:
             return
         if symbol == arcade.key.ESCAPE:
@@ -658,7 +659,14 @@ class Game(View):
 
 
 class PauseMenu(View):
+    """Меню паузы, появляющееся при нажатии ESC."""
+
     def __init__(self, game):
+        """Создаёт кнопки и сохраняет ссылку на игровое окно.
+
+        :param game: экземпляр игрового окна
+        :type game: Game
+        """
         super().__init__()
         self.ui_camera = None
         self.game = game
@@ -688,26 +696,33 @@ class PauseMenu(View):
         self._update_selection()
 
     def on_show(self):
+        """Активирует менеджер и показывает курсор."""
         self.manager.enable()
         self.window.set_mouse_visible(True)
 
     def on_hide(self):
+        """Отключает менеджер."""
         self.manager.disable()
 
     def on_draw(self):
+        """Рисует поверх игрового окна меню."""
         self.game.on_draw()
         self.manager.draw()
 
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
+        """Передаёт нажатие мыши менеджеру."""
         self.manager.on_mouse_press(x, y, button, modifiers)
 
     def on_mouse_release(self, x: float, y: float, button: int, modifiers: int):
+        """Передаёт отпускание мыши менеджеру."""
         self.manager.on_mouse_release(x, y, button, modifiers)
 
     def on_mouse_motion(self, x: float, y: float, dx: float, dy: float):
+        """Передаёт движение мыши менеджеру."""
         self.manager.on_mouse_motion(x, y, dx, dy)
 
-    def on_key_release(self, symbol: int, modifiers: int) -> None:
+    def on_key_release(self, symbol: int, modifiers: int):
+        """Обрабатывает клавиши управления и выход."""
         if symbol == arcade.key.UP:
             self.selected_index = (self.selected_index - 1) % len(self.buttons)
             self._update_selection()
@@ -720,15 +735,20 @@ class PauseMenu(View):
             self.window.show_view(self.game)
 
     def on_resume(self, event):
+        """Возврат в игру."""
         self.window.show_view(self.game)
 
     def on_main_menu(self, event):
+        """Выход в главное меню с сохранением результата."""
+        self.game.save_result()
         self.window.show_view(MainMenu())
 
     def on_quit(self, event):
+        """Закрытие окна."""
         self.window.close()
 
     def _update_selection(self):
+        """Визуально выделяет выбранную кнопку."""
         for i, btn in enumerate(self.buttons):
             if i == self.selected_index:
                 btn.color = arcade.color.LIGHT_BLUE
@@ -742,16 +762,53 @@ class PauseMenu(View):
 
 
 class StaticMenu(View):
-    def on_show(self):
-        self.background_color = arcade.color.DARK_GREEN
+    """Окно статистики, отображает лучшие результаты из базы данных."""
+
+    def __init__(self):
+        """Инициализирует пустой список результатов и цвет фона."""
+        super().__init__()
+        self.results = []
+        self.background_color = arcade.color.BLACK
+
+    def on_show_view(self):
+        """Загружает результаты из БД при показе."""
+        self.results = get_top_results(10)
 
     def on_draw(self):
+        """Рисует таблицу с результатами."""
         self.clear()
-        arcade.draw_text("Statistics Menu — здесь будет статистика",
-                         self.window.width // 2, self.window.height // 2,
-                         arcade.color.WHITE, anchor_x="center")
+
+        arcade.draw_text("Лучшие результаты",
+                         self.window.width // 2, self.window.height - 50,
+                         arcade.color.WHITE, font_size=30, anchor_x="center")
+
+        if not self.results:
+            arcade.draw_text("Нет сохранённых результатов",
+                             self.window.width // 2, self.window.height // 2,
+                             arcade.color.WHITE, font_size=20, anchor_x="center")
+        else:
+            arcade.draw_text("Дата и время", self.window.width // 2 - 200, self.window.height - 100,
+                             arcade.color.WHITE, font_size=16, anchor_x="left")
+            arcade.draw_text("Время (сек)", self.window.width // 2 + 100, self.window.height - 100,
+                             arcade.color.WHITE, font_size=16, anchor_x="left")
+
+            y = self.window.height - 130
+            for i, (date, time_val) in enumerate(self.results, 1):
+                arcade.draw_text(f"{i}.", self.window.width // 2 - 250, y,
+                                 arcade.color.WHITE, font_size=14, anchor_x="left")
+                arcade.draw_text(date, self.window.width // 2 - 200, y,
+                                 arcade.color.WHITE, font_size=14, anchor_x="left")
+                arcade.draw_text(f"{time_val:.1f}", self.window.width // 2 + 100, y,
+                                 arcade.color.WHITE, font_size=14, anchor_x="left")
+                y -= 25
+                if y < 50:
+                    break
+
+        arcade.draw_text("Нажмите ESC для выхода",
+                         self.window.width // 2, 30,
+                         arcade.color.WHITE, font_size=14, anchor_x="center")
 
     def on_key_release(self, symbol: int, modifiers: int):
+        """Возврат в главное меню по ESC."""
         if symbol == arcade.key.ESCAPE:
             self.window.show_view(MainMenu())
-        return None

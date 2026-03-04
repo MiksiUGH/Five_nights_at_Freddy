@@ -1,23 +1,24 @@
+"""Главный модуль окна приложения.
+
+Запускает игру, устанавливает главное меню.
+"""
+
+
 from arcade import Window, run
-from views import Game, MainMenu, StaticMenu
+from views import MainMenu
 
 
 class MainWindow(Window):
-    def __init__(self, width: int, height: int, title: str) -> None:
-        super().__init__(width, height, title)
+    """Основное окно игры, содержит виды (экраны)."""
 
+    def __init__(self, width: int, height: int, title: str) -> None:
+        """Создаёт окно с заданными размерами и заголовком."""
+        super().__init__(width, height, title)
         self.main_menu: MainMenu = MainMenu()
-        self.game: Game
-        self.static_menu: StaticMenu
 
     def setup(self) -> None:
+        """Устанавливает начальный вид — главное меню."""
         self.show_view(self.main_menu)
-
-    def on_update(self, delta_time: float) -> None:
-        ...
-
-    def on_key_press(self, symbol: int, modifiers: int) -> None:
-        ...
 
 
 if __name__ == "__main__":

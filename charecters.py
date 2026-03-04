@@ -1,8 +1,22 @@
-import arcade, math, random
+"""Модуль персонажей игры Five Nights at Freddy's.
+
+Содержит классы игрока (ночного сторожа) и аниматроников: Бонни, Чика, Фокси, Фредди.
+"""
+
+
+import math
+import random
+import arcade
 
 
 class NightGuard(arcade.Sprite):
+    """Класс игрока — ночного сторожа.
+
+    Управляется с клавиатуры, имеет анимации движения в разных направлениях.
+    """
+
     def __init__(self):
+        """Создаёт спрайт сторожа, загружает текстуры и настраивает анимацию."""
         super().__init__(scale=1.3)
 
         self.idle_texture = arcade.load_texture("images/player/sprite4.png")
@@ -37,7 +51,11 @@ class NightGuard(arcade.Sprite):
         self.facing_direction = 1  # 1 - вправо, -1 - влево
 
     def update_animation(self, dt: float = 1 / 60):
-        """Обновление анимации в зависимости от движения."""
+        """Обновляет кадр анимации в зависимости от направления движения.
+
+        :param dt: время с предыдущего кадра
+        :type dt: float
+        """
         self.time_since_last_frame += dt
 
         if self.change_x != 0:
@@ -71,11 +89,17 @@ class NightGuard(arcade.Sprite):
 
 
 class Freddy(arcade.Sprite):
+    """Аниматроник Фредди.
+
+    После активации исчезает и начинает следить за неподвижностью игрока.
+    """
+
     def __init__(self):
+        """Загружает текстуры и звуки, инициализирует состояние."""
         super().__init__(scale=1.3)
 
-        self.jumpscare = arcade.load_texture('images/freddy/jumpscare.jpg')  # предположим, такие файлы есть
-        self.jumpscare_sound = arcade.load_sound('sounds/scearm_sound.mp3')  # можно отдельный звук
+        self.jumpscare = arcade.load_texture('images/freddy/jumpscare.jpg')
+        self.jumpscare_sound = arcade.load_sound('sounds/scearm_sound.mp3')
         self.not_activate = arcade.load_texture('images/freddy/sprite00.png')
 
         self.state = "inactive"
@@ -84,7 +108,13 @@ class Freddy(arcade.Sprite):
 
 
 class Bonnie(arcade.Sprite):
+    """Аниматроник Бонни.
+
+    Патрулирует случайным образом, переходит в погоню, если видит игрока.
+    """
+
     def __init__(self):
+        """Загружает текстуры, звуки, задаёт начальные параметры."""
         super().__init__(scale=1.3)
 
         self.activated = False
@@ -114,23 +144,21 @@ class Bonnie(arcade.Sprite):
             arcade.load_texture("images/bonnie/sprite7.png"),
         ]
 
-        # Начинаем в неактивном состоянии
-        self.state = "inactive"  # inactive, patrol, chase
+        self.state = "inactive"
         self.texture = self.not_activate
         self.speed = 4
         self.chase_speed = 6
         self.stuck_timer = 0
-        self.stuck_threshold = 0.5  # секунд без движения
+        self.stuck_threshold = 0.5
         self.last_pos = (self.center_x, self.center_y)
 
         self.cur_texture_index = 0
-        self.animation_time = 0.2  # временно, будет заменяться
-        self.patrol_animation_time = 0.25  # медленно при патруле
-        self.chase_animation_time = 0.1  # быстро в погоне
+        self.animation_time = 0.2
+        self.patrol_animation_time = 0.25
+        self.chase_animation_time = 0.1
         self.time_since_last_frame = 0
         self.facing_direction = 1
 
-        # Таймеры для смены направления в патруле
         self.patrol_timer = 0
         self.direction_change_interval = random.uniform(2.0, 5.0)
 
@@ -140,7 +168,13 @@ class Bonnie(arcade.Sprite):
         self.teleport_cooldown = 0
 
     def check_doors(self, doors_list: arcade.SpriteList, dt: float):
-        """Проверка столкновения с дверями и телепортация."""
+        """Проверяет столкновение с дверью и при необходимости телепортирует.
+
+        :param doors_list: список спрайтов дверей
+        :type doors_list: arcade.SpriteList
+        :param dt: время с предыдущего кадра
+        :type dt: float
+        """
         if self.teleport_cooldown > 0:
             self.teleport_cooldown -= dt
         if self.teleport_cooldown <= 0:
@@ -148,12 +182,12 @@ class Bonnie(arcade.Sprite):
             if door_hit:
                 door = door_hit[0]
                 orientation = door.properties.get("orientation", None)
-                if orientation is not None:  # вертикальная дверь
+                if orientation is not None:
                     if self.center_y < door.center_y:
                         self.center_y = door.center_y + door.height // 2 + self.height // 2 + 30
                     else:
                         self.center_y = door.center_y - door.height // 2 - self.height // 2 - 30
-                else:  # горизонтальная
+                else:
                     if self.center_x < door.center_x:
                         self.center_x = door.center_x + door.width // 2 + self.width // 2 + 30
                     else:
@@ -161,7 +195,11 @@ class Bonnie(arcade.Sprite):
                 self.teleport_cooldown = 0.5
 
     def set_state(self, new_state):
-        """Безопасно меняет состояние и обновляет скорость анимации."""
+        """Безопасно меняет состояние и обновляет скорость анимации.
+
+        :param new_state: новое состояние ("inactive", "patrol", "chase")
+        :type new_state: str
+        """
         if self.state == new_state:
             return
         self.state = new_state
@@ -169,33 +207,36 @@ class Bonnie(arcade.Sprite):
             self.animation_time = self.chase_animation_time
         elif new_state == "patrol":
             self.animation_time = self.patrol_animation_time
-        # Для inactive скорость анимации не важна, оставляем как есть
 
     def update(self, dt: float, player: arcade.Sprite, stealth_mode: bool):
-        # Если в погоне и игрок в невидимости — теряем цель и возвращаемся к патрулю
+        """Обновляет логику движения в зависимости от состояния.
+
+        :param dt: время с предыдущего кадра
+        :type dt: float
+        :param player: спрайт игрока
+        :type player: arcade.Sprite
+        :param stealth_mode: режим невидимости игрока
+        :type stealth_mode: bool
+        """
         if self.state == "chase" and stealth_mode:
             self.set_state("patrol")
-            self.speed = 4  # исходная скорость патруля
+            self.speed = 4
             self.patrol_timer = 0
 
-        # Если неактивен — ничего не делаем
         if self.state == "inactive":
             self.change_x = 0
             self.change_y = 0
             return
 
-        # Проверка видимости игрока для перехода в погоню
         if self.state != "chase":
             dist = arcade.get_distance_between_sprites(self, player)
             if dist < 400 and not stealth_mode:
                 self.set_state("chase")
                 self.speed = self.chase_speed
 
-        # Обработка текущего состояния
         if self.state == "patrol":
             self._patrol_update(dt)
-            # Проверка на застревание для patrol
-            if (self.change_x != 0 or self.change_y != 0):
+            if self.change_x != 0 or self.change_y != 0:
                 if abs(self.center_x - self.last_pos[0]) < 1 and abs(self.center_y - self.last_pos[1]) < 1:
                     self.stuck_timer += dt
                 else:
@@ -208,14 +249,11 @@ class Bonnie(arcade.Sprite):
                     self.change_y = math.sin(angle) * self.speed
                     self.stuck_timer = 0
         elif self.state == "chase":
-            # Обновляем направление, если не в обходе
             if self.stuck_path_timer <= 0:
                 self._chase_update(player)
 
-            # Проверка на застревание по дистанции
             current_dist = arcade.get_distance_between_sprites(self, player)
             if self.last_dist_to_player is not None:
-                # Увеличенный допуск (5 пикселей)
                 if current_dist >= self.last_dist_to_player - 5:
                     self.stuck_path_timer += dt
                 else:
@@ -223,7 +261,6 @@ class Bonnie(arcade.Sprite):
             self.last_dist_to_player = current_dist
 
             if self.stuck_path_timer > self.stuck_path_threshold:
-                # Обходное движение (перпендикулярно)
                 dx = player.center_x - self.center_x
                 dy = player.center_y - self.center_y
                 dist = math.hypot(dx, dy)
@@ -241,10 +278,13 @@ class Bonnie(arcade.Sprite):
                 self.stuck_path_timer = 0
 
     def _patrol_update(self, dt: float):
-        """Случайное блуждание."""
+        """Случайное блуждание в режиме патруля.
+
+        :param dt: время с предыдущего кадра
+        :type dt: float
+        """
         self.patrol_timer += dt
         if self.patrol_timer >= self.direction_change_interval:
-            # Выбираем новое направление
             angle = random.uniform(0, 2 * math.pi)
             self.change_x = math.cos(angle) * self.speed
             self.change_y = math.sin(angle) * self.speed
@@ -252,7 +292,11 @@ class Bonnie(arcade.Sprite):
             self.direction_change_interval = random.uniform(2.0, 5.0)
 
     def _chase_update(self, player: arcade.Sprite):
-        """Бежим прямо к игроку."""
+        """Движение прямо к игроку в режиме погони.
+
+        :param player: спрайт игрока
+        :type player: arcade.Sprite
+        """
         dx = player.center_x - self.center_x
         dy = player.center_y - self.center_y
         dist = math.hypot(dx, dy)
@@ -261,7 +305,11 @@ class Bonnie(arcade.Sprite):
             self.change_y = (dy / dist) * self.speed
 
     def update_animation(self, dt: float = 1 / 60):
-        """Обновление анимации в зависимости от движения (как у игрока)."""
+        """Обновляет анимацию в зависимости от направления движения.
+
+        :param dt: время с предыдущего кадра
+        :type dt: float
+        """
         self.time_since_last_frame += dt
 
         if self.change_x != 0:
@@ -289,7 +337,6 @@ class Bonnie(arcade.Sprite):
                 self.time_since_last_frame = 0
 
         else:
-            # В состоянии покоя используем idle_texture, если активен, иначе not_activate
             if self.state == "inactive":
                 self.texture = self.not_activate
             else:
@@ -299,7 +346,13 @@ class Bonnie(arcade.Sprite):
 
 
 class Chika(arcade.Sprite):
+    """Аниматроник Чика.
+
+    При активации исчезает и появляется кекс, который перемещается.
+    """
+
     def __init__(self):
+        """Загружает текстуры, звук и инициализирует состояние."""
         super().__init__(scale=1.3)
 
         self.cupcake = arcade.load_texture('images/chika/cupcake.png')
@@ -307,13 +360,19 @@ class Chika(arcade.Sprite):
         self.jumpscare_sound = arcade.load_sound('sounds/scearm_sound.mp3')
         self.jumpscare = arcade.load_texture('images/chika/jumpscare.jpg')
 
-        self.state = "inactive"  # inactive, active
+        self.state = "inactive"
         self.texture = self.not_activate
         self.alpha = 0
 
 
 class Foxy(arcade.Sprite):
+    """Аниматроник Фокси.
+
+    Крадётся, меняя текстуры, затем атакует, если игрок не спрятался.
+    """
+
     def __init__(self):
+        """Загружает текстуры, звуки и задаёт начальные параметры."""
         super().__init__(scale=1.3)
 
         self.activated = False
@@ -343,8 +402,8 @@ class Foxy(arcade.Sprite):
             arcade.load_texture("images/foxy/sprite7.png"),
         ]
 
-        self.state = "inactive"  # inactive, stalking, chasing
-        self.step_index = 0  # 0..3 (sprite4..sprite7)
+        self.state = "inactive"
+        self.step_index = 0
         self.activation_timer = 0.0
         self.activation_interval = 20.0
         self.activation_chance = 0.6
@@ -354,16 +413,14 @@ class Foxy(arcade.Sprite):
         self.chase_speed = 8
         self.facing_direction = 1
 
-        # Начальная текстура
         self.texture = self.not_activate
 
-        # Для анимации (как у Bonnie)
         self.cur_texture_index = 0
         self.animation_time = 0.05
         self.time_since_last_frame = 0
 
         self.stuck_timer = 0
-        self.stuck_threshold = 0.5  # секунд без движения
+        self.stuck_threshold = 0.5
         self.last_pos = (self.center_x, self.center_y)
 
         self.last_dist_to_player = None
@@ -372,7 +429,13 @@ class Foxy(arcade.Sprite):
         self.teleport_cooldown = 0
 
     def check_doors(self, doors_list: arcade.SpriteList, dt: float):
-        """Проверка столкновения с дверями и телепортация."""
+        """Проверяет столкновение с дверью и телепортирует при необходимости.
+
+        :param doors_list: список спрайтов дверей
+        :type doors_list: arcade.SpriteList
+        :param dt: время с предыдущего кадра
+        :type dt: float
+        """
         if self.teleport_cooldown > 0:
             self.teleport_cooldown -= dt
         if self.teleport_cooldown <= 0:
@@ -393,7 +456,15 @@ class Foxy(arcade.Sprite):
                 self.teleport_cooldown = 0.5
 
     def update(self, dt: float, player: arcade.Sprite, stealth_mode: bool):
-        """Обновление логики Foxy."""
+        """Обновляет логику поведения: крадётся или преследует.
+
+        :param dt: время с предыдущего кадра
+        :type dt: float
+        :param player: спрайт игрока
+        :type player: arcade.Sprite
+        :param stealth_mode: режим невидимости игрока
+        :type stealth_mode: bool
+        """
         if self.state == "inactive":
             self.activation_timer += dt
             if self.activation_timer >= self.activation_interval:
@@ -411,34 +482,29 @@ class Foxy(arcade.Sprite):
                     if self.step_index < 3:
                         self.step_index += 1
                         self.texture = self.walk_down_textures[self.step_index]
-                    else:  # step_index == 3 (sprite7)
+                    else:
                         if stealth_mode:
-                            # Откат, если игрок спрятался
                             self.step_index = 0
                             self.texture = self.idle_texture
                         else:
-                            # Атака
                             self.state = "chasing"
-                            self.center_y -= 200  # опускаемся
+                            self.center_y -= 200
                             self.speed = self.chase_speed
                             self._update_chase_direction(player)
 
         if self.state == "chasing":
-            # Обновляем направление к игроку, если не в обходе
             if self.stuck_path_timer <= 0:
                 self._update_chase_direction(player)
 
-            # Проверка на застревание по дистанции
             current_dist = arcade.get_distance_between_sprites(self, player)
             if self.last_dist_to_player is not None:
-                if current_dist >= self.last_dist_to_player - 5:  # допуск 5 пикселей
+                if current_dist >= self.last_dist_to_player - 5:
                     self.stuck_path_timer += dt
                 else:
                     self.stuck_path_timer = 0
             self.last_dist_to_player = current_dist
 
             if self.stuck_path_timer > self.stuck_path_threshold:
-                # Обходное движение
                 dx = player.center_x - self.center_x
                 dy = player.center_y - self.center_y
                 dist = math.hypot(dx, dy)
@@ -456,7 +522,11 @@ class Foxy(arcade.Sprite):
                 self.stuck_path_timer = 0
 
     def _update_chase_direction(self, player: arcade.Sprite):
-        """Направление к игроку для погони."""
+        """Устанавливает направление движения прямо к игроку.
+
+        :param player: спрайт игрока
+        :type player: arcade.Sprite
+        """
         dx = player.center_x - self.center_x
         dy = player.center_y - self.center_y
         dist = math.hypot(dx, dy)
@@ -468,9 +538,12 @@ class Foxy(arcade.Sprite):
             self.change_y = 0
 
     def update_animation(self, dt: float = 1 / 60):
-        """Обновление анимации (для chasing работает как у Bonnie, для stalking не меняет текстуру)."""
+        """Обновляет анимацию в зависимости от текущего состояния и движения.
+
+        :param dt: время с предыдущего кадра
+        :type dt: float
+        """
         if self.state == "stalking":
-            # В stalking текстура управляется вручную через step_index
             return
 
         self.time_since_last_frame += dt
